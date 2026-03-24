@@ -1,0 +1,6 @@
+# 城市名,城市景点列表页
+北京,https://you.ctrip.com/sight/beijing1.html
+上海,https://you.ctrip.com/sight/shanghai2.html
+成都,https://you.ctrip.com/sight/chengdu104.html
+杭州,https://you.ctrip.com/sight/hangzhou14.html
+西安,https://you.ctrip.com/sight/xian7.html
