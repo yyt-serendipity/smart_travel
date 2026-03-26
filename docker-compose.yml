@@ -1,0 +1,63 @@
+services:
+  mysql:
+    build:
+      context: ./docker/mysql
+      dockerfile: Dockerfile
+    image: smart-travel-mysql:latest
+    container_name: smart-travel-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: smart_travel
+      MYSQL_ROOT_PASSWORD: 123456
+      TZ: Asia/Shanghai
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: smart-travel-backend:latest
+    container_name: smart-travel-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DEBUG: "false"
+      DB_ENGINE: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: smart_travel
+      DB_USER: root
+      DB_PASSWORD: 123456
+      ALLOWED_HOSTS: localhost,127.0.0.1,backend,frontend
+      CSRF_TRUSTED_ORIGINS: http://localhost:8080,http://127.0.0.1:8080
+      CORS_ALLOW_ALL_ORIGINS: "true"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: smart-travel-frontend:latest
+    container_name: smart-travel-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  mysql_data:
