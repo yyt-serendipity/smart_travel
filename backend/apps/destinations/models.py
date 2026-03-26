@@ -94,3 +94,26 @@ class Attraction(models.Model):
 
     def __str__(self) -> str:
         return f"{self.city.name} - {self.name}"
+
+
+class TravelCityGeoCache(models.Model):
+    city = models.OneToOneField(TravelCity, related_name="geo_cache", on_delete=models.CASCADE)
+    location = models.CharField(max_length=64, blank=True)
+    longitude = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
+    latitude = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
+    adcode = models.CharField(max_length=20, blank=True)
+    citycode = models.CharField(max_length=20, blank=True)
+    city_name = models.CharField(max_length=100, blank=True)
+    province = models.CharField(max_length=100, blank=True)
+    formatted_address = models.CharField(max_length=255, blank=True)
+    source_provider = models.CharField(max_length=32, default="amap")
+    source_signature = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = CORE_APP_LABEL
+        ordering = ["city_id"]
+
+    def __str__(self) -> str:
+        return f"{self.city.name} geo cache"

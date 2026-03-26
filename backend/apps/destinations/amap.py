@@ -1,11 +1,12 @@
 ﻿from __future__ import annotations
 
+import hashlib
 import os
 from functools import lru_cache
 
 import requests
 
-from apps.destinations.models import TravelCity
+from apps.destinations.models import TravelCity, TravelCityGeoCache
 from apps.destinations.services import clean_text
 
 
@@ -23,6 +24,23 @@ WEEKDAY_LABELS = {
 
 class AMapServiceError(Exception):
     """Raised when AMap rejects a request or city lookup cannot be resolved."""
+
+
+def _city_geo_signature(city: TravelCity) -> str:
+    return hashlib.sha1(f"{clean_text(city.name)}|{clean_text(city.province)}".encode("utf-8")).hexdigest()
+
+
+def _serialize_geo_cache(entry: TravelCityGeoCache) -> dict:
+    return {
+        "location": entry.location,
+        "longitude": float(entry.longitude) if entry.longitude is not None else None,
+        "latitude": float(entry.latitude) if entry.latitude is not None else None,
+        "adcode": entry.adcode,
+        "citycode": entry.citycode,
+        "city_name": entry.city_name,
+        "province": entry.province,
+        "formatted_address": entry.formatted_address,
+    }
 
 
 def get_amap_settings() -> dict | None:
@@ -73,62 +91,6 @@ def _parse_location_pair(location: str) -> tuple[float | None, float | None]:
         return None, None
 
 
-def _parse_center(location: str) -> dict:
-    longitude, latitude = _parse_location_pair(location)
-    return {
-        "longitude": longitude,
-        "latitude": latitude,
-    }
-
-
-def _parse_district_boundary(polyline: str) -> list[list[dict[str, float]]]:
-    segments = []
-    for raw_polygon in clean_text(polyline).split("|"):
-        points = []
-        for raw_point in raw_polygon.split(";"):
-            longitude, latitude = _parse_location_pair(raw_point)
-            if longitude is None or latitude is None:
-                continue
-            points.append({"longitude": longitude, "latitude": latitude})
-        if len(points) >= 3:
-            segments.append(points)
-    return segments
-
-
-@lru_cache(maxsize=128)
-def fetch_district(keyword: str, subdistrict: int = 1, extensions: str = "base") -> dict:
-    payload = _amap_get_json(
-        "/v3/config/district",
-        keywords=keyword,
-        subdistrict=subdistrict,
-        extensions=extensions,
-    )
-    districts = payload.get("districts") or []
-    if not districts:
-        raise AMapServiceError(f"暂时无法加载 {keyword} 的行政区地图数据。")
-
-    district = districts[0]
-    children = []
-    for item in district.get("districts") or []:
-        children.append(
-            {
-                "name": clean_text(item.get("name")),
-                "adcode": clean_text(item.get("adcode")),
-                "level": clean_text(item.get("level")),
-                "center": _parse_center(item.get("center")),
-            }
-        )
-
-    return {
-        "name": clean_text(district.get("name") or keyword),
-        "adcode": clean_text(district.get("adcode")),
-        "level": clean_text(district.get("level")),
-        "center": _parse_center(district.get("center")),
-        "boundary": _parse_district_boundary(district.get("polyline")),
-        "districts": children,
-    }
-
-
 @lru_cache(maxsize=2048)
 def _geocode_address(address: str, city_hint: str) -> dict | None:
     payload = _amap_get_json("/v3/geocode/geo", address=address, city=city_hint)
@@ -151,7 +113,34 @@ def _geocode_address(address: str, city_hint: str) -> dict | None:
     }
 
 
+def _persist_city_geo(city: TravelCity, geo: dict) -> dict:
+    signature = _city_geo_signature(city)
+    longitude = geo.get("longitude")
+    latitude = geo.get("latitude")
+    entry, _ = TravelCityGeoCache.objects.update_or_create(
+        city=city,
+        defaults={
+            "location": clean_text(geo.get("location")),
+            "longitude": longitude if longitude not in (None, "") else None,
+            "latitude": latitude if latitude not in (None, "") else None,
+            "adcode": clean_text(geo.get("adcode")),
+            "citycode": clean_text(geo.get("citycode")),
+            "city_name": clean_text(geo.get("city_name") or city.name),
+            "province": clean_text(geo.get("province") or city.province),
+            "formatted_address": clean_text(geo.get("formatted_address") or city.name),
+            "source_provider": "amap",
+            "source_signature": signature,
+        },
+    )
+    return _serialize_geo_cache(entry)
+
+
 def resolve_city_geo(city: TravelCity) -> dict:
+    signature = _city_geo_signature(city)
+    cached = TravelCityGeoCache.objects.filter(city=city, source_signature=signature).first()
+    if cached and cached.location and cached.longitude is not None and cached.latitude is not None:
+        return _serialize_geo_cache(cached)
+
     lookup_candidates = []
     province = clean_text(city.province)
     if province and province not in city.name:
@@ -162,12 +151,15 @@ def resolve_city_geo(city: TravelCity) -> dict:
         geo = _geocode_address(address, city_hint)
         if not geo:
             continue
-        return {
-            **geo,
-            "city_name": clean_text(geo.get("city_name") or city.name),
-            "province": clean_text(geo.get("province") or city.province),
-            "formatted_address": clean_text(geo.get("formatted_address") or city.name),
-        }
+        return _persist_city_geo(
+            city,
+            {
+                **geo,
+                "city_name": clean_text(geo.get("city_name") or city.name),
+                "province": clean_text(geo.get("province") or city.province),
+                "formatted_address": clean_text(geo.get("formatted_address") or city.name),
+            },
+        )
 
     raise AMapServiceError(f"暂时无法定位 {city.name} 的地图信息。")
 

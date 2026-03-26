@@ -5,23 +5,65 @@
     <article class="card section-shell stat-strip">
       <div class="stat-strip-item">
         <span class="muted">覆盖省份</span>
-        <strong>{{ provinceStats.length }}</strong>
+        <strong>{{ overview.stats.provinceCount }}</strong>
       </div>
       <div class="stat-strip-item">
         <span class="muted">收录城市</span>
-        <strong>{{ allCities.length }}</strong>
+        <strong>{{ overview.stats.cityCount }}</strong>
       </div>
       <div class="stat-strip-item">
         <span class="muted">收录景点</span>
-        <strong>{{ totalAttractionCount }}</strong>
+        <strong>{{ overview.stats.attractionCount }}</strong>
       </div>
       <div class="stat-strip-item">
         <span class="muted">最新帖子</span>
-        <strong>{{ overview.latest_posts.length }}</strong>
+        <strong>{{ overview.stats.latestPostCount }}</strong>
       </div>
     </article>
 
-    <ProvinceInspirationMap :provinces="provinceStats" :loading="loading" />
+    <article class="card section-shell">
+      <div class="title-row">
+        <SectionHeader title="省域旅行灵感" description="先从省份入口浏览，再进入对应城市和景点内容。" />
+        <RouterLink class="btn btn-secondary" to="/cities">全部城市</RouterLink>
+      </div>
+
+      <div v-if="loading && !overview.province_cards.length" class="page-state" style="margin-top: 24px">
+        <strong>正在加载省份入口...</strong>
+      </div>
+      <div v-else class="province-showcase-grid" style="margin-top: 24px">
+        <RouterLink
+          v-for="province in overview.province_cards"
+          :key="province.province"
+          class="province-showcase-card"
+          :to="{ name: 'cities', query: { province: province.province } }"
+        >
+          <div class="province-showcase-cover" :style="provinceCoverStyle(province)">
+            <span v-if="province.averageRating" class="province-rating-badge province-rating-corner">
+              <span class="province-rating-star">★</span>
+              <strong>{{ province.averageRating }}</strong>
+            </span>
+          </div>
+          <div class="province-showcase-copy">
+            <div class="title-row compact-row">
+              <strong>{{ province.shortName }}</strong>
+              <span class="pill">{{ province.cityCount }} 城市</span>
+            </div>
+            <p class="muted province-entry-line">
+              主入口城市：{{ province.topCity?.name || "待补充" }}，{{ province.attractionCount }} 景点
+            </p>
+            <div class="chip-row province-showcase-meta">
+              <span
+                v-for="tag in (province.topCity?.tags || []).slice(0, 3)"
+                :key="`${province.province}-${tag}`"
+                class="tag-pill"
+              >
+                {{ tag }}
+              </span>
+            </div>
+          </div>
+        </RouterLink>
+      </div>
+    </article>
 
     <article class="card section-shell">
       <div class="title-row">
@@ -87,17 +129,21 @@ import CityCard from "../components/CityCard.vue";
 import PostCard from "../components/PostCard.vue";
 import SectionHeader from "../components/SectionHeader.vue";
 import HomeHeroCarousel from "../components/home/HomeHeroCarousel.vue";
-import ProvinceInspirationMap from "../components/home/ProvinceInspirationMap.vue";
-import { getCities, getOverview } from "../services/api";
-import { buildProvinceStats } from "../utils/mapData";
+import { getOverview } from "../services/api";
 
 const loading = ref(true);
-const allCities = ref([]);
 const overview = ref({
   hero: {
     title: "围绕中国城市、景点与旅行内容建立的智能旅游平台",
     subtitle: "把景点资料、AI 行程、社区帖子和个人收藏整合到一套连续的浏览体验里。",
   },
+  stats: {
+    provinceCount: 0,
+    cityCount: 0,
+    attractionCount: 0,
+    latestPostCount: 0,
+  },
+  province_cards: [],
   recommendation: {
     is_personalized: false,
     home_city: null,
@@ -109,11 +155,6 @@ const overview = ref({
   spotlight_attractions: [],
   latest_posts: [],
 });
-
-const provinceStats = computed(() => buildProvinceStats(allCities.value));
-const totalAttractionCount = computed(() =>
-  allCities.value.reduce((sum, city) => sum + Number(city.attraction_count || 0), 0),
-);
 
 const carouselSlides = computed(() =>
   overview.value.featured_cities.slice(0, 4).map((city) => ({
@@ -127,11 +168,18 @@ const carouselSlides = computed(() =>
   })),
 );
 
+function provinceCoverStyle(province) {
+  const image = province.topCity?.cover_image;
+  return {
+    background: image
+      ? `linear-gradient(180deg, rgba(10, 37, 46, 0.14), rgba(10, 37, 46, 0.72)), url(${image}) center/cover`
+      : "linear-gradient(135deg, #0d5c63, #1b4965 58%, #f28f3b)",
+  };
+}
+
 onMounted(async () => {
   try {
-    const [overviewData, cities] = await Promise.all([getOverview(), getCities({ limit: 500 })]);
-    overview.value = overviewData;
-    allCities.value = cities;
+    overview.value = await getOverview();
   } finally {
     loading.value = false;
   }

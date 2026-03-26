@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.destinations.models import Attraction, Destination, TravelCity
+from apps.destinations.models import Attraction, Destination, TravelCity, TravelCityGeoCache
 
 
 @admin.register(Destination)
@@ -22,3 +22,9 @@ class AttractionAdmin(admin.ModelAdmin):
     list_display = ("name", "city", "rating", "suggested_play_time", "source_page", "imported_from_excel")
     search_fields = ("name", "city__name", "address", "description")
     list_filter = ("city", "imported_from_excel")
+
+
+@admin.register(TravelCityGeoCache)
+class TravelCityGeoCacheAdmin(admin.ModelAdmin):
+    list_display = ("city", "adcode", "citycode", "updated_at")
+    search_fields = ("city__name", "formatted_address", "adcode", "citycode")

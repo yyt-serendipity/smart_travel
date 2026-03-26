@@ -93,16 +93,6 @@ export async function getOverview() {
   return unwrap(await client.get("/overview/"));
 }
 
-// Load the home page province map overview payload.
-export async function getProvinceMapOverview() {
-  return unwrap(await client.get("/maps/provinces/overview/"));
-}
-
-// Load a single province map payload with city markers.
-export async function getProvinceMapDetail(province) {
-  return unwrap(await client.get("/maps/provinces/detail/", { params: { province } }));
-}
-
 // Load the travel city list with optional filters.
 export async function getCities(params = {}) {
   return unwrap(await client.get("/cities/", { params }));
