@@ -7,6 +7,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
 
+def env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_list(name: str, default: list[str] | None = None) -> list[str]:
+    value = os.getenv(name)
+    if value is None:
+        return list(default or [])
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 def load_env_file(env_path: Path) -> None:
     if not env_path.exists():
         return
@@ -22,9 +36,10 @@ def load_env_file(env_path: Path) -> None:
 
 load_env_file(BASE_DIR / ".env")
 
-SECRET_KEY = "replace-this-in-production"
-DEBUG = True
-ALLOWED_HOSTS = ["*"]
+DEBUG = env_bool("DEBUG", True)
+SECRET_KEY = os.getenv("SECRET_KEY", "replace-this-in-production")
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["*"] if DEBUG else ["127.0.0.1", "localhost"])
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
     "corsheaders",
@@ -120,7 +135,8 @@ OSS_SIGN_URL_EXPIRE_SECONDS = int(os.getenv("OSS_SIGN_URL_EXPIRE_SECONDS", "3153
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", DEBUG)
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS")
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],

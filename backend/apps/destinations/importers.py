@@ -22,7 +22,20 @@ from apps.destinations.services import (
 )
 
 
-EXPECTED_HEADERS = ("鍚嶅瓧", "閾炬帴", "鍦板潃", "浠嬬粛", "寮€鏀炬椂闂?", "鍥剧墖閾炬帴", "璇勫垎", "寤鸿娓哥帺鏃堕棿", "寤鸿瀛ｈ妭", "闂ㄧエ", "灏忚创澹?", "Page")
+EXPECTED_HEADERS = (
+    "名字",
+    "链接",
+    "地址",
+    "介绍",
+    "开放时间",
+    "图片链接",
+    "评分",
+    "建议游玩时间",
+    "建议季节",
+    "门票",
+    "小贴士",
+    "Page",
+)
 
 
 def _coerce_excel_source(excel_source: Path | str | bytes | BinaryIO):
@@ -72,9 +85,15 @@ def build_city_defaults(city_name: str, rows: list[tuple], source_file: str) -> 
     return {
         "province": fit_text(infer_province(city_name, *addresses, *descriptions), 100),
         "destination_type": infer_destination_type(city_name),
-        "short_intro": fit_text(f"{city_name}宸叉敹褰?{len(rows)} 涓櫙鐐癸紝閫傚悎鍋氬浗鍐呯洰鐨勫湴鎺ㄨ崘鍜屾櫙鐐圭骇 AI 琛岀▼瑙勫垝銆?", 220),
-        "overview": compact_text(descriptions[0] if descriptions else f"{city_name}鏄竴涓€傚悎鏃呰灞曠ず鐨勪腑鍥界洰鐨勫湴銆?", 800),
-        "travel_highlights": "銆?".join(tag for tag, _ in Counter(tag_pool).most_common(4)),
+        "short_intro": fit_text(
+            f"{city_name}收录了 {len(rows)} 个景点，适合城市漫游、周末度假和 AI 行程规划。",
+            220,
+        ),
+        "overview": compact_text(
+            descriptions[0] if descriptions else f"{city_name}拥有丰富的旅游资源，适合慢游体验与景点打卡。",
+            800,
+        ),
+        "travel_highlights": "、".join(tag for tag, _ in Counter(tag_pool).most_common(4)),
         "cover_image": fit_text(images[0] if images else "", 200),
         "best_season": fit_text(Counter(seasons).most_common(1)[0][0] if seasons else "", 200),
         "average_ticket": fit_text(ticket_infos[0] if ticket_infos else "", 255),
