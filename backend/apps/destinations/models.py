@@ -6,31 +6,6 @@ from django.db import models
 CORE_APP_LABEL = "core"
 
 
-class Destination(models.Model):
-    name = models.CharField("目的地名称", max_length=100, unique=True)
-    city = models.CharField("城市", max_length=100)
-    country = models.CharField("国家/地区", max_length=100)
-    tagline = models.CharField("短标语", max_length=180)
-    description = models.TextField("目的地介绍")
-    cover_gradient = models.CharField("封面渐变", max_length=120, blank=True)
-    best_season = models.CharField("推荐季节", max_length=100)
-    trip_days_min = models.PositiveIntegerField("最短游玩天数", default=3)
-    trip_days_max = models.PositiveIntegerField("最长游玩天数", default=8)
-    estimated_budget = models.PositiveIntegerField("人均预算", default=6000)
-    rating = models.DecimalField("推荐指数", max_digits=3, decimal_places=1, default=4.8)
-    tags = models.JSONField("标签", default=list, blank=True)
-    highlights = models.JSONField("亮点", default=list, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        app_label = CORE_APP_LABEL
-        ordering = ["-rating", "name"]
-
-    def __str__(self) -> str:
-        return self.name
-
-
 class TravelCity(models.Model):
     DESTINATION_TYPE_CHOICES = [
         ("city", "城市"),

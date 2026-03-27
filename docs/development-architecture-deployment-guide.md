@@ -1,259 +1,218 @@
-# Smart Travel 项目开发、架构与部署说明
+﻿# Smart Travel 椤圭洰寮€鍙戙€佹灦鏋勪笌閮ㄧ讲璇存槑
 
-## 1. 项目定位
+## 1. 椤圭洰瀹氫綅
 
-`smart_travel` 是一个围绕中国城市旅游场景构建的前后端分离项目，目标不是做通用 OTA，而是把一条完整的“数据采集 -> 数据入库 -> 内容展示 -> AI 规划 -> 社区互动 -> 后台管理 -> 线上部署”链路做完整。
+`smart_travel` 鏄竴涓洿缁曚腑鍥藉煄甯傛梾娓稿満鏅瀯寤虹殑鍓嶅悗绔垎绂婚」鐩紝鐩爣涓嶆槸鍋氶€氱敤 OTA锛岃€屾槸鎶婁竴鏉″畬鏁寸殑鈥滄暟鎹噰闆?-> 鏁版嵁鍏ュ簱 -> 鍐呭灞曠ず -> AI 瑙勫垝 -> 绀惧尯浜掑姩 -> 鍚庡彴绠＄悊 -> 绾夸笂閮ㄧ讲鈥濋摼璺仛瀹屾暣銆?
+褰撳墠椤圭洰瑕嗙洊鐨勬牳蹇冭兘鍔涳細
 
-当前项目覆盖的核心能力：
+- 鍩庡競鍒楄〃銆佸煄甯傝鎯呫€佹櫙鐐硅鎯?- AI 琛岀▼瑙勫垝涓庤绋嬩繚瀛?- 鏃呰绀惧尯鍙戝笘銆佺偣璧炪€佹敹钘忋€佽瘎璁?- 鍚庡彴鏁版嵁绠＄悊銆佹棩蹇楀璁°€丒xcel 瀵煎叆
+- 楂樺痉澶╂皵 / 闈欐€佸湴鍥?- 闃块噷浜?OSS 涓婁紶
+- Qwen / DashScope 澶фā鍨嬭鍒?
+## 2. 鎶€鏈爤
 
-- 城市列表、城市详情、景点详情
-- AI 行程规划与行程保存
-- 旅行社区发帖、点赞、收藏、评论
-- 后台数据管理、日志审计、Excel 导入
-- 高德天气 / 静态地图
-- 阿里云 OSS 上传
-- Qwen / DashScope 大模型规划
-
-## 2. 技术栈
-
-| 层 | 技术 |
+| 灞?| 鎶€鏈?|
 | --- | --- |
-| 前端 | Vue 3、Vue Router、Axios、Vite |
-| 后端 | Django 5.1、Django REST Framework、Token Auth |
-| 数据库 | MySQL 为主，SQLite 作为回退 |
-| 数据导入 | openpyxl、Excel 批量导入 |
-| 第三方服务 | DashScope(Qwen)、高德开放平台、阿里云 OSS |
-| 部署 | Ubuntu 24.04、Gunicorn、Nginx、systemd |
+| 鍓嶇 | Vue 3銆乂ue Router銆丄xios銆乂ite |
+| 鍚庣 | Django 5.1銆丏jango REST Framework銆乀oken Auth |
+| 鏁版嵁搴?| MySQL 涓轰富锛孲QLite 浣滀负鍥為€€ |
+| 鏁版嵁瀵煎叆 | openpyxl銆丒xcel 鎵归噺瀵煎叆 |
+| 绗笁鏂规湇鍔?| DashScope(Qwen)銆侀珮寰峰紑鏀惧钩鍙般€侀樋閲屼簯 OSS |
+| 閮ㄧ讲 | Ubuntu 24.04銆丟unicorn銆丯ginx銆乻ystemd |
 
-## 3. 开发流程总览
+## 3. 寮€鍙戞祦绋嬫€昏
 
 ```mermaid
 flowchart TD
-    A[需求拆解] --> B[确定数据来源: 本地 Excel + 爬虫 Excel]
-    B --> C[设计核心数据模型]
-    C --> D[按业务拆分 Django apps]
-    D --> E[实现 REST API]
-    E --> F[实现 Vue 页面与路由]
-    F --> G[接入 AI / 地图 / 上传等第三方服务]
-    G --> H[联调与构建验证]
-    H --> I[生产配置收敛]
-    I --> J[部署到 Ubuntu + Nginx + Gunicorn + MySQL]
+    A[闇€姹傛媶瑙 --> B[纭畾鏁版嵁鏉ユ簮: 鏈湴 Excel + 鐖櫕 Excel]
+    B --> C[璁捐鏍稿績鏁版嵁妯″瀷]
+    C --> D[鎸変笟鍔℃媶鍒?Django apps]
+    D --> E[瀹炵幇 REST API]
+    E --> F[瀹炵幇 Vue 椤甸潰涓庤矾鐢盷
+    F --> G[鎺ュ叆 AI / 鍦板浘 / 涓婁紶绛夌涓夋柟鏈嶅姟]
+    G --> H[鑱旇皟涓庢瀯寤洪獙璇乚
+    H --> I[鐢熶骇閰嶇疆鏀舵暃]
+    I --> J[閮ㄧ讲鍒?Ubuntu + Nginx + Gunicorn + MySQL]
 ```
 
-可以把这个项目理解为 6 个连续阶段：
+鍙互鎶婅繖涓」鐩悊瑙ｄ负 6 涓繛缁樁娈碉細
 
-1. 数据准备：确定 Excel 模板、导入逻辑和爬虫输出格式。
-2. 数据建模：先把城市、景点、用户、社区、行程等核心实体建起来。
-3. 后端 API：按用户、目的地、规划、社区、后台拆模块。
-4. 前端页面：基于统一 API 拼装用户端与后台端界面。
-5. 第三方集成：接 OSS、AMap、DashScope。
-6. 上线运维：把开发配置收成生产配置，并完成部署。
-
-## 4. 系统架构
+1. 鏁版嵁鍑嗗锛氱‘瀹?Excel 妯℃澘銆佸鍏ラ€昏緫鍜岀埇铏緭鍑烘牸寮忋€?2. 鏁版嵁寤烘ā锛氬厛鎶婂煄甯傘€佹櫙鐐广€佺敤鎴枫€佺ぞ鍖恒€佽绋嬬瓑鏍稿績瀹炰綋寤鸿捣鏉ャ€?3. 鍚庣 API锛氭寜鐢ㄦ埛銆佺洰鐨勫湴銆佽鍒掋€佺ぞ鍖恒€佸悗鍙版媶妯″潡銆?4. 鍓嶇椤甸潰锛氬熀浜庣粺涓€ API 鎷艰鐢ㄦ埛绔笌鍚庡彴绔晫闈€?5. 绗笁鏂归泦鎴愶細鎺?OSS銆丄Map銆丏ashScope銆?6. 涓婄嚎杩愮淮锛氭妸寮€鍙戦厤缃敹鎴愮敓浜ч厤缃紝骞跺畬鎴愰儴缃层€?
+## 4. 绯荤粺鏋舵瀯
 
 ```mermaid
 flowchart LR
-    Browser[浏览器 / Vue SPA] --> Nginx[Nginx]
-    Nginx -->|静态文件| Dist[frontend/dist]
+    Browser[娴忚鍣?/ Vue SPA] --> Nginx[Nginx]
+    Nginx -->|闈欐€佹枃浠秥 Dist[frontend/dist]
     Nginx -->|/api /site-admin| Gunicorn[Gunicorn]
     Gunicorn --> Django[Django + DRF]
     Django --> MySQL[(MySQL)]
-    Django --> OSS[阿里云 OSS]
-    Django --> AMap[高德天气 / 静态地图]
+    Django --> OSS[闃块噷浜?OSS]
+    Django --> AMap[楂樺痉澶╂皵 / 闈欐€佸湴鍥綸
     Django --> LLM[DashScope / Qwen]
 ```
 
-设计重点：
+璁捐閲嶇偣锛?
+- 鍓嶇 `axios` 缁熶竴鎶?API 璇锋眰鍙戝埌鍚屽煙 `/api`
+- 鐢熶骇鐜鐢?Nginx 鎵樼 Vue 鏋勫缓浜х墿
+- Nginx 鍐嶆妸 `/api` 鍜?`/site-admin` 鍙嶄唬鍒?Gunicorn
+- Django 鍙礋璐ｄ笟鍔?API 鍜屽悗鍙帮紝涓嶇洿鎺ユ毚闇插紑鍙戞湇鍔″櫒
 
-- 前端 `axios` 统一把 API 请求发到同域 `/api`
-- 生产环境由 Nginx 托管 Vue 构建产物
-- Nginx 再把 `/api` 和 `/site-admin` 反代到 Gunicorn
-- Django 只负责业务 API 和后台，不直接暴露开发服务器
-
-这也是为什么前端没有写死后端域名，而是用相对路径：
+杩欎篃鏄负浠€涔堝墠绔病鏈夊啓姝诲悗绔煙鍚嶏紝鑰屾槸鐢ㄧ浉瀵硅矾寰勶細
 
 - `frontend/src/services/api.js`
 - `frontend/vite.config.js`
 
-## 5. 仓库结构
+## 5. 浠撳簱缁撴瀯
 
 ```text
 smart_travel/
-├─ backend/
-│  ├─ apps/
-│  │  ├─ backoffice/
-│  │  ├─ community/
-│  │  ├─ core/
-│  │  ├─ destinations/
-│  │  ├─ planner/
-│  │  └─ users/
-│  ├─ smart_travel/
-│  ├─ manage.py
-│  └─ requirements.txt
-├─ frontend/
-│  ├─ public/
-│  ├─ src/
-│  │  ├─ components/
-│  │  ├─ router/
-│  │  ├─ services/
-│  │  ├─ stores/
-│  │  └─ views/
-├─ docs/
-└─ scripts/
+鈹溾攢 backend/
+鈹? 鈹溾攢 apps/
+鈹? 鈹? 鈹溾攢 backoffice/
+鈹? 鈹? 鈹溾攢 community/
+鈹? 鈹? 鈹溾攢 core/
+鈹? 鈹? 鈹溾攢 destinations/
+鈹? 鈹? 鈹溾攢 planner/
+鈹? 鈹? 鈹斺攢 users/
+鈹? 鈹溾攢 smart_travel/
+鈹? 鈹溾攢 manage.py
+鈹? 鈹斺攢 requirements.txt
+鈹溾攢 frontend/
+鈹? 鈹溾攢 public/
+鈹? 鈹溾攢 src/
+鈹? 鈹? 鈹溾攢 components/
+鈹? 鈹? 鈹溾攢 router/
+鈹? 鈹? 鈹溾攢 services/
+鈹? 鈹? 鈹溾攢 stores/
+鈹? 鈹? 鈹斺攢 views/
+鈹溾攢 docs/
+鈹斺攢 scripts/
 ```
 
-## 6. 后端模块拆分思路
+## 6. 鍚庣妯″潡鎷嗗垎鎬濊矾
 
-### 6.1 为什么模型还挂在 `core` app label 上
-
-这是项目一个很关键的工程决策。
-
-模型代码现在分别写在：
-
+### 6.1 涓轰粈涔堟ā鍨嬭繕鎸傚湪 `core` app label 涓?
+杩欐槸椤圭洰涓€涓緢鍏抽敭鐨勫伐绋嬪喅绛栥€?
+妯″瀷浠ｇ爜鐜板湪鍒嗗埆鍐欏湪锛?
 - `apps/destinations/models.py`
 - `apps/users/models.py`
 - `apps/planner/models.py`
 - `apps/community/models.py`
 - `apps/backoffice/models.py`
 
-但这些模型都保留了：
+浣嗚繖浜涙ā鍨嬮兘淇濈暀浜嗭細
 
 ```python
 CORE_APP_LABEL = "core"
 ```
 
-并在 `Meta.app_label = CORE_APP_LABEL`。
+骞跺湪 `Meta.app_label = CORE_APP_LABEL`銆?
+杩欐牱鍋氱殑鐩殑锛?
+1. 淇濈暀鍘嗗彶 MySQL 琛ㄥ悕锛屼緥濡?`core_travelcity`銆乣core_travelpost`
+2. 閬垮厤鍥犱负鈥滄媶 app鈥濊€岄噸寤烘暟鎹簱
+3. 浠ｇ爜鍒嗗眰鏇存竻鏅帮紝浣嗘暟鎹簱杩佺Щ椋庨櫓鏇翠綆
 
-这样做的目的：
-
-1. 保留历史 MySQL 表名，例如 `core_travelcity`、`core_travelpost`
-2. 避免因为“拆 app”而重建数据库
-3. 代码分层更清晰，但数据库迁移风险更低
-
-对应的兼容出口在：
-
+瀵瑰簲鐨勫吋瀹瑰嚭鍙ｅ湪锛?
 - `backend/apps/core/models.py`
 
-它只是把各业务模型重新导出，方便历史导入路径继续可用。
+瀹冨彧鏄妸鍚勪笟鍔℃ā鍨嬮噸鏂板鍑猴紝鏂逛究鍘嗗彶瀵煎叆璺緞缁х画鍙敤銆?
+### 6.2 鍚?app 鑱岃矗
 
-### 6.2 各 app 职责
-
-| app | 作用 |
+| app | 浣滅敤 |
 | --- | --- |
-| `core` | 兼容模型导出、审计日志、标签工具、上传工具、权限工具、管理命令 |
-| `users` | 注册、登录、登出、个人资料、用户主页、上传接口 |
-| `destinations` | 首页概览、城市、景点、Excel 导入、地图天气、城市资料推导 |
-| `planner` | AI 行程生成、规则降级、保存行程 |
-| `community` | 帖子、点赞、收藏、评论 |
-| `backoffice` | 后台统计、用户/城市/景点/帖子管理、操作日志、后台导入 |
+| `core` | 鍏煎妯″瀷瀵煎嚭銆佸璁℃棩蹇椼€佹爣绛惧伐鍏枫€佷笂浼犲伐鍏枫€佹潈闄愬伐鍏枫€佺鐞嗗懡浠?|
+| `users` | 娉ㄥ唽銆佺櫥褰曘€佺櫥鍑恒€佷釜浜鸿祫鏂欍€佺敤鎴蜂富椤点€佷笂浼犳帴鍙?|
+| `destinations` | 棣栭〉姒傝銆佸煄甯傘€佹櫙鐐广€丒xcel 瀵煎叆銆佸湴鍥惧ぉ姘斻€佸煄甯傝祫鏂欐帹瀵?|
+| `planner` | AI 琛岀▼鐢熸垚銆佽鍒欓檷绾с€佷繚瀛樿绋?|
+| `community` | 甯栧瓙銆佺偣璧炪€佹敹钘忋€佽瘎璁?|
+| `backoffice` | 鍚庡彴缁熻銆佺敤鎴?鍩庡競/鏅偣/甯栧瓙绠＄悊銆佹搷浣滄棩蹇椼€佸悗鍙板鍏?|
 
-## 7. 关键后端实现
+## 7. 鍏抽敭鍚庣瀹炵幇
 
-### 7.1 配置入口
+### 7.1 閰嶇疆鍏ュ彛
 
-核心文件：
-
+鏍稿績鏂囦欢锛?
 - `backend/smart_travel/settings.py`
 - `backend/smart_travel/urls.py`
 
-重要点：
+閲嶈鐐癸細
 
-1. 项目启动时会先读取 `backend/.env`
-2. 通过 `DB_ENGINE` 在 MySQL / SQLite 之间切换
-3. 通过 `DEBUG`、`ALLOWED_HOSTS`、`CORS_ALLOWED_ORIGINS` 收敛生产配置
-4. `/site-admin/` 挂 Django Admin
-5. `/api/` 挂各业务模块
+1. 椤圭洰鍚姩鏃朵細鍏堣鍙?`backend/.env`
+2. 閫氳繃 `DB_ENGINE` 鍦?MySQL / SQLite 涔嬮棿鍒囨崲
+3. 閫氳繃 `DEBUG`銆乣ALLOWED_HOSTS`銆乣CORS_ALLOWED_ORIGINS` 鏀舵暃鐢熶骇閰嶇疆
+4. `/site-admin/` 鎸?Django Admin
+5. `/api/` 鎸傚悇涓氬姟妯″潡
 
-### 7.2 用户与认证
-
-核心文件：
-
+### 7.2 鐢ㄦ埛涓庤璇?
+鏍稿績鏂囦欢锛?
 - `backend/apps/users/views.py`
 - `backend/apps/users/services.py`
 - `backend/apps/users/models.py`
 
-这部分实现了：
+杩欓儴鍒嗗疄鐜颁簡锛?
+- `Token` 鐧诲綍鎬?- 娉ㄥ唽鍚庤嚜鍔ㄥ垱寤?`UserProfile`
+- 涓汉涓婚〉鐨?`home_city` 鍜?`home_city_ref`
+- 涓婁紶鎺ュ彛 `/api/uploads/`
 
-- `Token` 登录态
-- 注册后自动创建 `UserProfile`
-- 个人主页的 `home_city` 和 `home_city_ref`
-- 上传接口 `/api/uploads/`
+璁捐浜偣锛?
+1. `ensure_user_profile()` 淇濊瘉鐢ㄦ埛璧勬枡鏄儼鎬цˉ榻愮殑锛岃€屼笉鏄緷璧栦竴娆℃€у垵濮嬪寲銆?2. `serialize_user()` 浼氭妸涓婚〉灞曠ず鎵€闇€鐨勫瓧娈典竴娆℃€ф墦骞崇粰鍓嶇銆?
+### 7.3 鍩庡競 / 鏅偣 / 棣栭〉
 
-设计亮点：
-
-1. `ensure_user_profile()` 保证用户资料是惰性补齐的，而不是依赖一次性初始化。
-2. `serialize_user()` 会把主页展示所需的字段一次性打平给前端。
-
-### 7.3 城市 / 景点 / 首页
-
-核心文件：
-
+鏍稿績鏂囦欢锛?
 - `backend/apps/destinations/views.py`
 - `backend/apps/destinations/models.py`
 - `backend/apps/destinations/home_recommendations.py`
 - `backend/apps/destinations/services.py`
 
-这部分负责：
+杩欓儴鍒嗚礋璐ｏ細
 
-- 首页总览 `/api/overview/`
-- 城市列表、城市详情、推荐城市
-- 景点列表、景点详情
-- 高德天气 `/api/cities/{id}/weather/`
-- 高德静态地图 `/api/cities/{id}/static-map/`
+- 棣栭〉鎬昏 `/api/overview/`
+- 鍩庡競鍒楄〃銆佸煄甯傝鎯呫€佹帹鑽愬煄甯?- 鏅偣鍒楄〃銆佹櫙鐐硅鎯?- 楂樺痉澶╂皵 `/api/cities/{id}/weather/`
+- 楂樺痉闈欐€佸湴鍥?`/api/cities/{id}/static-map/`
 
-首页推荐逻辑不是简单按评分排序，而是结合：
+棣栭〉鎺ㄨ崘閫昏緫涓嶆槸绠€鍗曟寜璇勫垎鎺掑簭锛岃€屾槸缁撳悎锛?
+- 鍩庡競/鏅偣璇勫垎
+- 鏅偣鏁伴噺
+- 鐢ㄦ埛涓婚〉涓殑甯镐綇鍩庡競
+- 鐢ㄦ埛鍋忓ソ鐨勬梾琛岄鏍?
+### 7.4 Excel 瀵煎叆
 
-- 城市/景点评分
-- 景点数量
-- 用户主页中的常住城市
-- 用户偏好的旅行风格
-
-### 7.4 Excel 导入
-
-核心文件：
-
+鏍稿績鏂囦欢锛?
 - `backend/apps/destinations/importers.py`
 - `backend/apps/core/management/commands/import_city_excels.py`
 
-导入逻辑：
-
+瀵煎叆閫昏緫锛?
 ```mermaid
 sequenceDiagram
-    participant Excel as Excel 工作簿
-    participant Importer as importers.py
+    participant Excel as Excel 宸ヤ綔绨?    participant Importer as importers.py
     participant City as TravelCity
     participant Spot as Attraction
 
-    Excel->>Importer: 读取表头和数据行
-    Importer->>Importer: 校验表头
-    Importer->>Importer: 推导省份、标签、封面、简介等城市字段
-    Importer->>City: update_or_create(name=城市名)
-    loop 每一行景点
-        Importer->>Spot: update_or_create(city, name)
+    Excel->>Importer: 璇诲彇琛ㄥご鍜屾暟鎹
+    Importer->>Importer: 鏍￠獙琛ㄥご
+    Importer->>Importer: 鎺ㄥ鐪佷唤銆佹爣绛俱€佸皝闈€佺畝浠嬬瓑鍩庡競瀛楁
+    Importer->>City: update_or_create(name=鍩庡競鍚?
+    loop 姣忎竴琛屾櫙鐐?        Importer->>Spot: update_or_create(city, name)
     end
     Importer->>City: compute_city_profile(city)
 ```
 
-这里最重要的设计是：
+杩欓噷鏈€閲嶈鐨勮璁℃槸锛?
+1. 鍩庡競鍚嶉粯璁ゆ潵鑷枃浠跺悕锛岃€屼笉鏄?Excel 涓崟鐙瓧娈?2. `TravelCity` 鐢?`update_or_create(name=city_name)` 鏇存柊
+3. `Attraction` 鐢?`(city, name)` 浣滀负鑷劧涓婚敭鏇存柊
+4. `overwrite=True` 鏃讹紝褰撳墠宸ヤ綔绨垮氨鏄鍩庡競鏅偣鐨勭湡鐩告簮
 
-1. 城市名默认来自文件名，而不是 Excel 中单独字段
-2. `TravelCity` 用 `update_or_create(name=city_name)` 更新
-3. `Attraction` 用 `(city, name)` 作为自然主键更新
-4. `overwrite=True` 时，当前工作簿就是该城市景点的真相源
+### 7.5 AI 琛岀▼瑙勫垝
 
-### 7.5 AI 行程规划
-
-核心文件：
-
+鏍稿績鏂囦欢锛?
 - `backend/apps/planner/views.py`
 - `backend/apps/planner/services.py`
 - `backend/apps/planner/models.py`
 
-规划流程：
-
+瑙勫垝娴佺▼锛?
 ```mermaid
 sequenceDiagram
-    participant FE as Planner 页面
+    participant FE as Planner 椤甸潰
     participant API as PlannerGenerateAPIView
     participant Service as build_ai_plan
     participant LLM as DashScope / Qwen
@@ -261,147 +220,114 @@ sequenceDiagram
 
     FE->>API: POST /api/planner/generate/
     API->>Service: build_ai_plan(payload)
-    Service->>DB: 查询目标城市/推荐城市/景点池
-    alt 配置了 LLM 且调用成功
-        Service->>LLM: 发送结构化 prompt
-        LLM-->>Service: 返回 JSON itinerary
-        Service->>Service: 归一化为前端固定结构
-    else LLM 不可用 / 解析失败 / 网络失败
-        Service->>Service: 走规则规划
-    end
-    Service-->>API: 返回 itinerary + budget + city
-    API-->>FE: JSON 响应
+    Service->>DB: 鏌ヨ鐩爣鍩庡競/鎺ㄨ崘鍩庡競/鏅偣姹?    alt 閰嶇疆浜?LLM 涓旇皟鐢ㄦ垚鍔?        Service->>LLM: 鍙戦€佺粨鏋勫寲 prompt
+        LLM-->>Service: 杩斿洖 JSON itinerary
+        Service->>Service: 褰掍竴鍖栦负鍓嶇鍥哄畾缁撴瀯
+    else LLM 涓嶅彲鐢?/ 瑙ｆ瀽澶辫触 / 缃戠粶澶辫触
+        Service->>Service: 璧拌鍒欒鍒?    end
+    Service-->>API: 杩斿洖 itinerary + budget + city
+    API-->>FE: JSON 鍝嶅簲
 ```
 
-这里的关键不是“有大模型”，而是“没有大模型也能返回结果”。
+杩欓噷鐨勫叧閿笉鏄€滄湁澶фā鍨嬧€濓紝鑰屾槸鈥滄病鏈夊ぇ妯″瀷涔熻兘杩斿洖缁撴灉鈥濄€?
+`build_ai_plan()` 鐨勭瓥鐣ユ槸锛?
+1. 鍏堟壘鐩爣鍩庡競
+2. 鎵句笉鍒板氨鎺ㄨ崘涓€涓渶鍚堥€傜殑鍩庡競
+3. 灏濊瘯璋冪敤 LLM
+4. 浠讳竴澶辫触閮介檷绾у埌瑙勫垯瑙勫垝
+5. 濡傛灉鐢ㄦ埛瑕佹眰淇濆瓨锛屽啀钀戒竴浠?`TravelPlan`
 
-`build_ai_plan()` 的策略是：
+杩欒 AI 鍔熻兘浠庘€滃彲閫夊寮衡€濆彉鎴愨€滀笉浼氶樆鏂富娴佺▼鈥濄€?
+### 7.6 绀惧尯妯″潡
 
-1. 先找目标城市
-2. 找不到就推荐一个最合适的城市
-3. 尝试调用 LLM
-4. 任一失败都降级到规则规划
-5. 如果用户要求保存，再落一份 `TravelPlan`
-
-这让 AI 功能从“可选增强”变成“不会阻断主流程”。
-
-### 7.6 社区模块
-
-核心文件：
-
+鏍稿績鏂囦欢锛?
 - `backend/apps/community/views.py`
 - `backend/apps/community/models.py`
 - `backend/apps/community/services.py`
 
-实现能力：
-
-- 发帖
-- 帖子详情浏览计数
-- 点赞切换
-- 收藏切换
-- 评论与回复
-
-数据库上用两条唯一约束保证重复操作不会产生脏数据：
+瀹炵幇鑳藉姏锛?
+- 鍙戝笘
+- 甯栧瓙璇︽儏娴忚璁℃暟
+- 鐐硅禐鍒囨崲
+- 鏀惰棌鍒囨崲
+- 璇勮涓庡洖澶?
+鏁版嵁搴撲笂鐢ㄤ袱鏉″敮涓€绾︽潫淇濊瘉閲嶅鎿嶄綔涓嶄細浜х敓鑴忔暟鎹細
 
 - `uniq_post_like`
 - `uniq_post_favorite`
 
-### 7.7 后台模块
+### 7.7 鍚庡彴妯″潡
 
-核心文件：
-
+鏍稿績鏂囦欢锛?
 - `backend/apps/backoffice/views.py`
 - `backend/apps/backoffice/urls.py`
 - `backend/apps/backoffice/models.py`
 
-后台主要承担：
+鍚庡彴涓昏鎵挎媴锛?
+- 缁熻姹囨€?- 鐢ㄦ埛绠＄悊
+- 鍩庡競 / 鏅偣 CRUD
+- 甯栧瓙绠＄悊
+- Excel 瀵煎叆
+- 鎿嶄綔鏃ュ織鏌ヨ
 
-- 统计汇总
-- 用户管理
-- 城市 / 景点 CRUD
-- 帖子管理
-- Excel 导入
-- 操作日志查询
+杩欓噷鐨勪竴涓璁￠噸鐐规槸锛氬悗鍙颁笉鏄洿鎺ュ鐢ㄧ敤鎴风椤甸潰锛岃€屾槸鐙珛 `layout=admin` 鐨勫墠绔３灞傘€?
+### 7.8 鎿嶄綔鏃ュ織
 
-这里的一个设计重点是：后台不是直接复用用户端页面，而是独立 `layout=admin` 的前端壳层。
-
-### 7.8 操作日志
-
-核心文件：
-
+鏍稿績鏂囦欢锛?
 - `backend/apps/core/activity.py`
 - `backend/apps/backoffice/models.py`
 
-`log_operation()` 是很多请求的通用审计入口，记录：
+`log_operation()` 鏄緢澶氳姹傜殑閫氱敤瀹¤鍏ュ彛锛岃褰曪細
 
-- 用户
-- 分类
-- 操作名
-- 请求路径
+- 鐢ㄦ埛
+- 鍒嗙被
+- 鎿嶄綔鍚?- 璇锋眰璺緞
 - IP
-- 操作对象
-- 细节 JSON
+- 鎿嶄綔瀵硅薄
+- 缁嗚妭 JSON
 
-它既支持 Django 模型实例，也支持上传文件这种临时 dict 对象。
-
-### 7.9 上传与媒体
-
-核心文件：
-
+瀹冩棦鏀寔 Django 妯″瀷瀹炰緥锛屼篃鏀寔涓婁紶鏂囦欢杩欑涓存椂 dict 瀵硅薄銆?
+### 7.9 涓婁紶涓庡獟浣?
+鏍稿績鏂囦欢锛?
 - `backend/apps/core/media_utils.py`
 
-当前上传链路：
+褰撳墠涓婁紶閾捐矾锛?
+1. 鏍￠獙鎵╁睍鍚?2. 璇诲彇浜岃繘鍒跺唴瀹?3. 涓婁紶鍒伴樋閲屼簯 OSS
+4. 杩斿洖绛惧悕 URL
 
-1. 校验扩展名
-2. 读取二进制内容
-3. 上传到阿里云 OSS
-4. 返回签名 URL
-
-这意味着上传功能依赖以下配置：
-
+杩欐剰鍛崇潃涓婁紶鍔熻兘渚濊禆浠ヤ笅閰嶇疆锛?
 - `OSS_ACCESS_KEY_ID`
 - `OSS_ACCESS_KEY_SECRET`
 - `OSS_BUCKET_NAME`
 - `OSS_ENDPOINT`
 
-### 7.10 地图与天气缓存
-
-核心文件：
-
+### 7.10 鍦板浘涓庡ぉ姘旂紦瀛?
+鏍稿績鏂囦欢锛?
 - `backend/apps/destinations/amap.py`
 - `backend/apps/destinations/models.py`
 
-`TravelCityGeoCache` 用来缓存高德解析出的：
-
-- 经纬度
-- `adcode`
+`TravelCityGeoCache` 鐢ㄦ潵缂撳瓨楂樺痉瑙ｆ瀽鍑虹殑锛?
+- 缁忕含搴?- `adcode`
 - `citycode`
-- 规范地址
+- 瑙勮寖鍦板潃
 
-作用是避免每次查天气都重新做一次地理编码。
+浣滅敤鏄伩鍏嶆瘡娆℃煡澶╂皵閮介噸鏂板仛涓€娆″湴鐞嗙紪鐮併€?
+## 8. 鍓嶇缁撴瀯
 
-## 8. 前端结构
+### 8.1 鍓嶇澹冲眰
 
-### 8.1 前端壳层
-
-核心文件：
-
+鏍稿績鏂囦欢锛?
 - `frontend/src/App.vue`
 
-设计要点：
+璁捐瑕佺偣锛?
+1. 鏅€氱敤鎴风鍜屽悗鍙扮鍏辩敤涓€涓?Vue 搴旂敤
+2. 閫氳繃璺敱 `meta.layout === "admin"` 鍐冲畾鍒囨崲鎴愬悗鍙板澹?3. 鐧诲綍 / 娉ㄥ唽椤甸潰浣跨敤鍗曠嫭鐨勫垏鎹㈠姩鐢?
+### 8.2 璺敱
 
-1. 普通用户端和后台端共用一个 Vue 应用
-2. 通过路由 `meta.layout === "admin"` 决定切换成后台外壳
-3. 登录 / 注册页面使用单独的切换动画
-
-### 8.2 路由
-
-核心文件：
-
+鏍稿績鏂囦欢锛?
 - `frontend/src/router/index.js`
 
-重要路由：
-
+閲嶈璺敱锛?
 - `/`
 - `/cities`
 - `/cities/:id`
@@ -415,48 +341,40 @@ sequenceDiagram
 - `/profile`
 - `/backoffice`
 
-路由守卫负责：
+璺敱瀹堝崼璐熻矗锛?
+1. 鏈櫥褰曠姝㈣繘鍏?`/profile`銆乣/backoffice`
+2. 宸茬櫥褰曠敤鎴蜂笉鍐嶈繘鍏?`/login`銆乣/register`
+3. 闈炵鐞嗗憳绂佹杩涘叆鍚庡彴
 
-1. 未登录禁止进入 `/profile`、`/backoffice`
-2. 已登录用户不再进入 `/login`、`/register`
-3. 非管理员禁止进入后台
-
-### 8.3 API 层
-
-核心文件：
-
+### 8.3 API 灞?
+鏍稿績鏂囦欢锛?
 - `frontend/src/services/api.js`
 - `frontend/src/stores/auth.js`
 
-关键点：
+鍏抽敭鐐癸細
 
-1. `baseURL` 固定为 `/api`
-2. 请求拦截器自动带 `Token xxx`
-3. 遇到 `401` 自动清理本地登录态
-4. 本地登录态保存在 `localStorage`
+1. `baseURL` 鍥哄畾涓?`/api`
+2. 璇锋眰鎷︽埅鍣ㄨ嚜鍔ㄥ甫 `Token xxx`
+3. 閬囧埌 `401` 鑷姩娓呯悊鏈湴鐧诲綍鎬?4. 鏈湴鐧诲綍鎬佷繚瀛樺湪 `localStorage`
 
-## 9. 数据库设计
+## 9. 鏁版嵁搴撹璁?
+### 9.1 涓昏瀹炰綋
 
-### 9.1 主要实体
-
-| 实体 | 说明 |
+| 瀹炰綋 | 璇存槑 |
 | --- | --- |
-| `auth_user` | Django 内置用户表 |
-| `UserProfile` | 用户补充资料 |
-| `TravelCity` | 城市 / 区域 / 景区 |
-| `TravelCityGeoCache` | 高德地理缓存 |
-| `Attraction` | 景点 |
-| `TravelPlan` | AI 生成并保存的用户行程 |
-| `TravelPost` | 社区帖子 |
-| `PostLike` | 帖子点赞 |
-| `PostFavorite` | 帖子收藏 |
-| `PostComment` | 帖子评论与回复 |
-| `OperationLog` | 审计日志 |
-| `Destination` | 旧版目的地模型，保留兼容 |
-| `TripPlan` | 旧版行程模型，保留兼容 |
+| `auth_user` | Django 鍐呯疆鐢ㄦ埛琛?|
+| `UserProfile` | 鐢ㄦ埛琛ュ厖璧勬枡 |
+| `TravelCity` | 鍩庡競 / 鍖哄煙 / 鏅尯 |
+| `TravelCityGeoCache` | 楂樺痉鍦扮悊缂撳瓨 |
+| `Attraction` | 鏅偣 |
+| `TravelPlan` | AI 鐢熸垚骞朵繚瀛樼殑鐢ㄦ埛琛岀▼ |
+| `TravelPost` | 绀惧尯甯栧瓙 |
+| `PostLike` | 甯栧瓙鐐硅禐 |
+| `PostFavorite` | 甯栧瓙鏀惰棌 |
+| `PostComment` | 甯栧瓙璇勮涓庡洖澶?|
+| `OperationLog` | 瀹¤鏃ュ織 |
 
-### 9.2 ER 图
-
+### 9.2 ER 鍥?
 ```mermaid
 erDiagram
     AUTH_USER ||--o| USER_PROFILE : has
@@ -482,45 +400,41 @@ erDiagram
     POST_COMMENT ||--o{ POST_COMMENT : replies_to
 ```
 
-### 9.3 主关系说明
+### 9.3 涓诲叧绯昏鏄?
+1. 涓€涓敤鎴峰搴斾竴涓?`UserProfile`
+2. 涓€涓煄甯傚搴斿涓櫙鐐?3. 涓€涓煄甯傛渶澶氬搴斾竴鏉″湴鐞嗙紦瀛?4. 涓€涓敤鎴峰彲浠ヤ繚瀛樺涓?`TravelPlan`
+5. 涓€涓笘瀛愬彲浠ュ叧鑱斿煄甯傦紝涔熷彲浠ヨ繘涓€姝ュ叧鑱斿埌鏌愪釜鏅偣
+6. 鐐硅禐鍜屾敹钘忛兘閫氳繃鍞竴绾︽潫闃查噸
+7. 璇勮鏀寔鑷叧鑱斿舰鎴愬洖澶嶆爲
 
-1. 一个用户对应一个 `UserProfile`
-2. 一个城市对应多个景点
-3. 一个城市最多对应一条地理缓存
-4. 一个用户可以保存多个 `TravelPlan`
-5. 一个帖子可以关联城市，也可以进一步关联到某个景点
-6. 点赞和收藏都通过唯一约束防重
-7. 评论支持自关联形成回复树
+### 9.4 鍏抽敭绾︽潫
 
-### 9.4 关键约束
-
-| 约束 | 作用 |
+| 绾︽潫 | 浣滅敤 |
 | --- | --- |
-| `uniq_attraction_city_name` | 同一城市下景点名唯一 |
-| `uniq_post_like` | 同一用户对同一帖子只能点赞一次 |
-| `uniq_post_favorite` | 同一用户对同一帖子只能收藏一次 |
+| `uniq_attraction_city_name` | 鍚屼竴鍩庡競涓嬫櫙鐐瑰悕鍞竴 |
+| `uniq_post_like` | 鍚屼竴鐢ㄦ埛瀵瑰悓涓€甯栧瓙鍙兘鐐硅禐涓€娆?|
+| `uniq_post_favorite` | 鍚屼竴鐢ㄦ埛瀵瑰悓涓€甯栧瓙鍙兘鏀惰棌涓€娆?|
 
-## 10. 关键代码入口索引
+## 10. 鍏抽敭浠ｇ爜鍏ュ彛绱㈠紩
 
-| 文件 | 作用 | 备注 |
+| 鏂囦欢 | 浣滅敤 | 澶囨敞 |
 | --- | --- | --- |
-| `backend/smart_travel/settings.py` | 环境配置、数据库切换、生产配置 | 项目配置入口 |
-| `backend/smart_travel/urls.py` | 全局路由汇总 | API 主入口 |
-| `backend/apps/destinations/importers.py` | Excel 导入核心逻辑 | 数据入库最关键 |
-| `backend/apps/destinations/home_recommendations.py` | 首页个性化推荐 | 首页算法入口 |
-| `backend/apps/destinations/amap.py` | 高德天气和地图缓存 | 第三方集成 |
-| `backend/apps/planner/services.py` | AI 行程规划与规则降级 | 规划核心 |
-| `backend/apps/community/views.py` | 社区交互行为 | 点赞、评论、收藏 |
-| `backend/apps/core/activity.py` | 操作日志审计 | 后台可追溯 |
-| `backend/apps/core/media_utils.py` | OSS 上传封装 | 上传能力核心 |
-| `frontend/src/router/index.js` | 前端路由与守卫 | 页面访问控制 |
-| `frontend/src/services/api.js` | 前端 API 客户端 | 与后端衔接 |
-| `scripts/deploy_server.py` | 远程部署脚本 | 线上部署自动化 |
+| `backend/smart_travel/settings.py` | 鐜閰嶇疆銆佹暟鎹簱鍒囨崲銆佺敓浜ч厤缃?| 椤圭洰閰嶇疆鍏ュ彛 |
+| `backend/smart_travel/urls.py` | 鍏ㄥ眬璺敱姹囨€?| API 涓诲叆鍙?|
+| `backend/apps/destinations/importers.py` | Excel 瀵煎叆鏍稿績閫昏緫 | 鏁版嵁鍏ュ簱鏈€鍏抽敭 |
+| `backend/apps/destinations/home_recommendations.py` | 棣栭〉涓€у寲鎺ㄨ崘 | 棣栭〉绠楁硶鍏ュ彛 |
+| `backend/apps/destinations/amap.py` | 楂樺痉澶╂皵鍜屽湴鍥剧紦瀛?| 绗笁鏂归泦鎴?|
+| `backend/apps/planner/services.py` | AI 琛岀▼瑙勫垝涓庤鍒欓檷绾?| 瑙勫垝鏍稿績 |
+| `backend/apps/community/views.py` | 绀惧尯浜や簰琛屼负 | 鐐硅禐銆佽瘎璁恒€佹敹钘?|
+| `backend/apps/core/activity.py` | 鎿嶄綔鏃ュ織瀹¤ | 鍚庡彴鍙拷婧?|
+| `backend/apps/core/media_utils.py` | OSS 涓婁紶灏佽 | 涓婁紶鑳藉姏鏍稿績 |
+| `frontend/src/router/index.js` | 鍓嶇璺敱涓庡畧鍗?| 椤甸潰璁块棶鎺у埗 |
+| `frontend/src/services/api.js` | 鍓嶇 API 瀹㈡埛绔?| 涓庡悗绔鎺?|
+| `scripts/deploy_server.py` | 杩滅▼閮ㄧ讲鑴氭湰 | 绾夸笂閮ㄧ讲鑷姩鍖?|
 
-## 11. API 总览
+## 11. API 鎬昏
 
-### 11.1 用户与资料
-
+### 11.1 鐢ㄦ埛涓庤祫鏂?
 - `POST /api/auth/register/`
 - `POST /api/auth/login/`
 - `POST /api/auth/logout/`
@@ -529,7 +443,7 @@ erDiagram
 - `PATCH /api/profile/me/`
 - `POST /api/uploads/`
 
-### 11.2 首页 / 城市 / 景点
+### 11.2 棣栭〉 / 鍩庡競 / 鏅偣
 
 - `GET /api/overview/`
 - `GET /api/cities/`
@@ -540,13 +454,13 @@ erDiagram
 - `GET /api/attractions/`
 - `GET /api/attractions/{id}/`
 
-### 11.3 AI 行程
+### 11.3 AI 琛岀▼
 
 - `POST /api/planner/generate/`
 - `GET /api/plans/`
 - `POST /api/plans/`
 
-### 11.4 社区
+### 11.4 绀惧尯
 
 - `GET /api/posts/`
 - `GET /api/posts/{id}/`
@@ -556,7 +470,7 @@ erDiagram
 - `GET /api/posts/favorites/`
 - `POST /api/posts/{id}/comment/`
 
-### 11.5 后台
+### 11.5 鍚庡彴
 
 - `GET /api/backoffice/summary/`
 - `GET/PUT/DELETE /api/backoffice/users/`
@@ -567,9 +481,8 @@ erDiagram
 - `POST /api/backoffice/import-excels/`
 - `POST /api/backoffice/import-excels/upload/`
 
-## 12. 本地开发流程
-
-### 12.1 后端
+## 12. 鏈湴寮€鍙戞祦绋?
+### 12.1 鍚庣
 
 ```powershell
 cd backend
@@ -580,14 +493,14 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-### 12.2 导入 Excel 数据
+### 12.2 瀵煎叆 Excel 鏁版嵁
 
 ```powershell
 cd backend
-.venv\Scripts\python.exe manage.py import_city_excels --directory "C:/Users/你的目录/cities_data_excel"
+.venv\Scripts\python.exe manage.py import_city_excels --directory "C:/Users/浣犵殑鐩綍/cities_data_excel"
 ```
 
-### 12.3 前端
+### 12.3 鍓嶇
 
 ```powershell
 cd frontend
@@ -595,7 +508,7 @@ npm install
 npm run dev
 ```
 
-### 12.4 常用校验命令
+### 12.4 甯哥敤鏍￠獙鍛戒护
 
 ```powershell
 cd backend
@@ -606,63 +519,59 @@ cd ..\frontend
 npm run build
 ```
 
-## 13. 部署说明
+## 13. 閮ㄧ讲璇存槑
 
-### 13.1 生产部署架构
+### 13.1 鐢熶骇閮ㄧ讲鏋舵瀯
 
-本项目当前生产部署方式：
+鏈」鐩綋鍓嶇敓浜ч儴缃叉柟寮忥細
 
-- 系统：Ubuntu 24.04 64 位
-- Web：Nginx
-- Python 进程：Gunicorn
-- 应用：Django
-- 数据库：MySQL
-- 进程守护：systemd
+- 绯荤粺锛歎buntu 24.04 64 浣?- Web锛歂ginx
+- Python 杩涚▼锛欸unicorn
+- 搴旂敤锛欴jango
+- 鏁版嵁搴擄細MySQL
+- 杩涚▼瀹堟姢锛歴ystemd
 
-线上目录与配置路径：
+绾夸笂鐩綍涓庨厤缃矾寰勶細
 
-- 项目目录：`/srv/smart_travel`
-- systemd：`/etc/systemd/system/smart_travel.service`
-- Nginx 站点：`/etc/nginx/sites-available/smart_travel`
-- Nginx 启用链接：`/etc/nginx/sites-enabled/smart_travel`
+- 椤圭洰鐩綍锛歚/srv/smart_travel`
+- systemd锛歚/etc/systemd/system/smart_travel.service`
+- Nginx 绔欑偣锛歚/etc/nginx/sites-available/smart_travel`
+- Nginx 鍚敤閾炬帴锛歚/etc/nginx/sites-enabled/smart_travel`
 
-当前线上访问地址：
-
+褰撳墠绾夸笂璁块棶鍦板潃锛?
 - `http://8.137.180.180/`
 
-### 13.2 部署前准备
+### 13.2 閮ㄧ讲鍓嶅噯澶?
+#### 鏈湴鍑嗗
 
-#### 本地准备
+1. 鍚庣渚濊禆瀹夎瀹屾垚
+2. 鍓嶇鑳藉 `npm run build`
+3. 鏈湴 MySQL 鏁版嵁姝ｇ‘
+4. `backend/.env` 涓涓夋柟瀵嗛挜瀹屾暣
 
-1. 后端依赖安装完成
-2. 前端能够 `npm run build`
-3. 本地 MySQL 数据正确
-4. `backend/.env` 中第三方密钥完整
+#### 鏈嶅姟鍣ㄥ噯澶?
+闇€瑕佸叿澶囷細
 
-#### 服务器准备
+- `root` 鎴栧彲 sudo 璐︽埛
+- 鍙敤鍏綉 IP
+- 鍙畨瑁?`nginx`銆乣mysql-server`銆乣python3-venv`
 
-需要具备：
+### 13.3 鎵嬪姩閮ㄧ讲姝ラ
 
-- `root` 或可 sudo 账户
-- 可用公网 IP
-- 可安装 `nginx`、`mysql-server`、`python3-venv`
-
-### 13.3 手动部署步骤
-
-#### 第一步：构建前端
+#### 绗竴姝ワ細鏋勫缓鍓嶇
 
 ```powershell
 cd frontend
 npm run build
 ```
 
-#### 第二步：导出本地 MySQL
+#### 绗簩姝ワ細瀵煎嚭鏈湴 MySQL
 
-在 Windows 上推荐这样导出：
+鍦?Windows 涓婃帹鑽愯繖鏍峰鍑猴細
 
 ```powershell
 & 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe' `
-  -uroot -p你的密码 `
+  -uroot -p浣犵殑瀵嗙爜 `
   --default-character-set=utf8mb4 `
   --single-transaction `
   --routines `
@@ -672,51 +581,46 @@ npm run build
   smart_travel
 ```
 
-注意：
+娉ㄦ剰锛?
+- 鍦?PowerShell 閲屼笉瑕佺敤 `>` 鍘婚噸瀹氬悜 mysqldump 杈撳嚭
+- 鎺ㄨ崘鐢?`--result-file`
+- 鍚﹀垯鍙兘鐢熸垚甯︾┖瀛楄妭鐨?UTF-16 鏂囦欢锛屾湇鍔″櫒瀵煎叆鏃朵細鎶ラ敊
 
-- 在 PowerShell 里不要用 `>` 去重定向 mysqldump 输出
-- 推荐用 `--result-file`
-- 否则可能生成带空字节的 UTF-16 文件，服务器导入时会报错
+#### 绗笁姝ワ細鍑嗗涓婁紶鍐呭
 
-#### 第三步：准备上传内容
-
-需要上传：
+闇€瑕佷笂浼狅細
 
 - `backend/`
 - `frontend/dist/`
-- 数据库备份 `smart_travel.sql`
+- 鏁版嵁搴撳浠?`smart_travel.sql`
 
-不应上传：
-
+涓嶅簲涓婁紶锛?
 - `backend/.venv/`
 - `frontend/node_modules/`
 - `.git/`
 - `.idea/`
-- 本地 `.env`
+- 鏈湴 `.env`
 
-#### 第四步：服务器安装依赖
-
+#### 绗洓姝ワ細鏈嶅姟鍣ㄥ畨瑁呬緷璧?
 ```bash
 apt-get update
 apt-get install -y nginx mysql-server python3-venv python3-pip
 systemctl enable --now mysql nginx
 ```
 
-#### 第五步：创建项目目录与运行用户
-
+#### 绗簲姝ワ細鍒涘缓椤圭洰鐩綍涓庤繍琛岀敤鎴?
 ```bash
 useradd --system --create-home --shell /bin/bash smarttravel
 mkdir -p /srv/smart_travel
 ```
 
-#### 第六步：恢复数据库
-
+#### 绗叚姝ワ細鎭㈠鏁版嵁搴?
 ```bash
 mysql <<'SQL'
 DROP DATABASE IF EXISTS smart_travel;
 CREATE DATABASE smart_travel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS 'smart_travel'@'127.0.0.1' IDENTIFIED BY '你的数据库密码';
-CREATE USER IF NOT EXISTS 'smart_travel'@'localhost' IDENTIFIED BY '你的数据库密码';
+CREATE USER IF NOT EXISTS 'smart_travel'@'127.0.0.1' IDENTIFIED BY '浣犵殑鏁版嵁搴撳瘑鐮?;
+CREATE USER IF NOT EXISTS 'smart_travel'@'localhost' IDENTIFIED BY '浣犵殑鏁版嵁搴撳瘑鐮?;
 GRANT ALL PRIVILEGES ON smart_travel.* TO 'smart_travel'@'127.0.0.1';
 GRANT ALL PRIVILEGES ON smart_travel.* TO 'smart_travel'@'localhost';
 FLUSH PRIVILEGES;
@@ -725,8 +629,7 @@ SQL
 mysql smart_travel < smart_travel.sql
 ```
 
-#### 第七步：创建后端虚拟环境并安装依赖
-
+#### 绗竷姝ワ細鍒涘缓鍚庣铏氭嫙鐜骞跺畨瑁呬緷璧?
 ```bash
 cd /srv/smart_travel/backend
 python3 -m venv .venv
@@ -734,12 +637,11 @@ python3 -m venv .venv
 ./.venv/bin/pip install -r requirements.txt
 ```
 
-#### 第八步：写生产环境变量
-
-服务器 `backend/.env` 至少需要：
+#### 绗叓姝ワ細鍐欑敓浜х幆澧冨彉閲?
+鏈嶅姟鍣?`backend/.env` 鑷冲皯闇€瑕侊細
 
 ```env
-SECRET_KEY=生产环境专用密钥
+SECRET_KEY=鐢熶骇鐜涓撶敤瀵嗛挜
 DEBUG=False
 ALLOWED_HOSTS=8.137.180.180,127.0.0.1,localhost
 CSRF_TRUSTED_ORIGINS=http://8.137.180.180
@@ -749,19 +651,16 @@ CORS_ALLOWED_ORIGINS=http://8.137.180.180
 DB_ENGINE=mysql
 DB_NAME=smart_travel
 DB_USER=smart_travel
-DB_PASSWORD=你的数据库密码
-DB_HOST=127.0.0.1
+DB_PASSWORD=浣犵殑鏁版嵁搴撳瘑鐮?DB_HOST=127.0.0.1
 DB_PORT=3306
 ```
 
-如果项目要完整可用，还需要补：
-
+濡傛灉椤圭洰瑕佸畬鏁村彲鐢紝杩橀渶瑕佽ˉ锛?
 - `OSS_*`
 - `DASHSCOPE_*`
 - `AMAP_*`
 
-#### 第九步：迁移与静态文件
-
+#### 绗節姝ワ細杩佺Щ涓庨潤鎬佹枃浠?
 ```bash
 cd /srv/smart_travel/backend
 ./.venv/bin/python manage.py migrate --noinput
@@ -769,7 +668,7 @@ cd /srv/smart_travel/backend
 ./.venv/bin/python manage.py check
 ```
 
-#### 第十步：配置 Gunicorn(systemd)
+#### 绗崄姝ワ細閰嶇疆 Gunicorn(systemd)
 
 `/etc/systemd/system/smart_travel.service`
 
@@ -791,14 +690,13 @@ RestartSec=5
 WantedBy=multi-user.target
 ```
 
-启用：
-
+鍚敤锛?
 ```bash
 systemctl daemon-reload
 systemctl enable --now smart_travel
 ```
 
-#### 第十一步：配置 Nginx
+#### 绗崄涓€姝ワ細閰嶇疆 Nginx
 
 `/etc/nginx/sites-available/smart_travel`
 
@@ -840,8 +738,7 @@ server {
 }
 ```
 
-启用：
-
+鍚敤锛?
 ```bash
 find /etc/nginx/sites-enabled -maxdepth 1 -type l -name 'default*' -delete
 ln -sfn /etc/nginx/sites-available/smart_travel /etc/nginx/sites-enabled/smart_travel
@@ -849,27 +746,23 @@ nginx -t
 systemctl restart nginx
 ```
 
-### 13.4 使用脚本部署
+### 13.4 浣跨敤鑴氭湰閮ㄧ讲
 
-项目中已经提供了：
-
+椤圭洰涓凡缁忔彁渚涗簡锛?
 - `scripts/deploy_server.py`
 
-它负责自动完成：
+瀹冭礋璐ｈ嚜鍔ㄥ畬鎴愶細
 
-1. 连接服务器
-2. 安装依赖
-3. 上传应用包与 SQL
-4. 创建虚拟环境
-5. 重建远程 MySQL
-6. 写入生产 `.env`
-7. 写入 systemd 与 Nginx 配置
-8. 启动服务并验证
-
-脚本调用示意：
-
+1. 杩炴帴鏈嶅姟鍣?2. 瀹夎渚濊禆
+3. 涓婁紶搴旂敤鍖呬笌 SQL
+4. 鍒涘缓铏氭嫙鐜
+5. 閲嶅缓杩滅▼ MySQL
+6. 鍐欏叆鐢熶骇 `.env`
+7. 鍐欏叆 systemd 涓?Nginx 閰嶇疆
+8. 鍚姩鏈嶅姟骞堕獙璇?
+鑴氭湰璋冪敤绀烘剰锛?
 ```powershell
-$env:SMART_TRAVEL_SSH_PASSWORD='你的 SSH 密码'
+$env:SMART_TRAVEL_SSH_PASSWORD='浣犵殑 SSH 瀵嗙爜'
 python scripts\deploy_server.py `
   --host 8.137.180.180 `
   --username root `
@@ -877,14 +770,10 @@ python scripts\deploy_server.py `
   --dump C:\temp\smart_travel.sql
 ```
 
-注意：
-
-- 这个脚本会重建远程数据库
-- 如果远程已有 `smart_travel` 数据库，会先做一次服务器端备份
-- 但它的默认语义仍然是“用本地 dump 覆盖远程数据”
-
-### 13.5 部署后检查
-
+娉ㄦ剰锛?
+- 杩欎釜鑴氭湰浼氶噸寤鸿繙绋嬫暟鎹簱
+- 濡傛灉杩滅▼宸叉湁 `smart_travel` 鏁版嵁搴擄紝浼氬厛鍋氫竴娆℃湇鍔″櫒绔浠?- 浣嗗畠鐨勯粯璁よ涔変粛鐒舵槸鈥滅敤鏈湴 dump 瑕嗙洊杩滅▼鏁版嵁鈥?
+### 13.5 閮ㄧ讲鍚庢鏌?
 ```bash
 systemctl status smart_travel
 systemctl status nginx
@@ -895,33 +784,26 @@ curl -I http://127.0.0.1/site-admin/login/
 curl http://127.0.0.1/api/overview/
 ```
 
-常用运维命令：
-
+甯哥敤杩愮淮鍛戒护锛?
 ```bash
 journalctl -u smart_travel -n 200 --no-pager
 systemctl restart smart_travel
 systemctl restart nginx
 ```
 
-## 14. 当前工程注意事项
+## 14. 褰撳墠宸ョ▼娉ㄦ剰浜嬮」
 
-1. 项目保留了 `Destination` 与 `TripPlan` 旧模型，属于兼容数据，不是主流程核心。
-2. `TravelCityGeoCache` 已经补入迁移，后续改模型前要先跑：
-
+1. ????? `Destination` ? `TripPlan` ?????????????????? `TravelCity` / `Attraction` / `TravelPlan`?
 ```powershell
 cd backend
 .venv\Scripts\python.exe manage.py makemigrations --check --dry-run
 ```
 
-3. 前端 API 是相对路径 `/api`，生产环境依赖 Nginx 反代，不建议改成硬编码域名。
-4. 上传目前走 OSS，如果要改成本地文件上传，需要调整 `apps/core/media_utils.py`。
-
-## 15. 建议的后续维护方式
-
-1. 每次改模型前先看 `app_label = "core"` 的兼容约束。
-2. 每次上线前至少执行：
+3. 鍓嶇 API 鏄浉瀵硅矾寰?`/api`锛岀敓浜х幆澧冧緷璧?Nginx 鍙嶄唬锛屼笉寤鸿鏀规垚纭紪鐮佸煙鍚嶃€?4. 涓婁紶鐩墠璧?OSS锛屽鏋滆鏀规垚鏈湴鏂囦欢涓婁紶锛岄渶瑕佽皟鏁?`apps/core/media_utils.py`銆?
+## 15. 寤鸿鐨勫悗缁淮鎶ゆ柟寮?
+1. 姣忔鏀规ā鍨嬪墠鍏堢湅 `app_label = "core"` 鐨勫吋瀹圭害鏉熴€?2. 姣忔涓婄嚎鍓嶈嚦灏戞墽琛岋細
    - `python manage.py check`
    - `python manage.py makemigrations --check --dry-run`
    - `npm run build`
-3. 每次部署前保留远程数据库备份。
-4. 如果后续接入域名，优先继续沿用 `Nginx + Gunicorn + Django`，只是在 Nginx 层补 HTTPS 即可。
+3. 姣忔閮ㄧ讲鍓嶄繚鐣欒繙绋嬫暟鎹簱澶囦唤銆?4. 濡傛灉鍚庣画鎺ュ叆鍩熷悕锛屼紭鍏堢户缁部鐢?`Nginx + Gunicorn + Django`锛屽彧鏄湪 Nginx 灞傝ˉ HTTPS 鍗冲彲銆?
+
