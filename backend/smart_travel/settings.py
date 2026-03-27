@@ -20,11 +20,29 @@ def load_env_file(env_path: Path) -> None:
         os.environ.setdefault(key, value)
 
 
+# Read backend/.env without adding an extra dependency such as python-dotenv.
 load_env_file(BASE_DIR / ".env")
 
-SECRET_KEY = "replace-this-in-production"
-DEBUG = True
-ALLOWED_HOSTS = ["*"]
+
+def env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def env_list(name: str, default: list[str] | None = None) -> list[str]:
+    raw_value = os.getenv(name, "")
+    items = [item.strip() for item in raw_value.split(",") if item.strip()]
+    if items:
+        return items
+    return default or []
+
+
+SECRET_KEY = os.getenv("SECRET_KEY", "replace-this-in-production")
+DEBUG = env_bool("DEBUG", True)
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", ["127.0.0.1", "localhost"])
+CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
     "corsheaders",
@@ -75,6 +93,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "smart_travel.wsgi.application"
 ASGI_APPLICATION = "smart_travel.asgi.application"
 
+# Keep a sqlite fallback for demos, but default to MySQL for the real project data.
 DB_ENGINE = os.getenv("DB_ENGINE", "mysql").lower()
 
 if DB_ENGINE == "sqlite":
@@ -107,7 +126,7 @@ TIME_ZONE = "Asia/Shanghai"
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 OSS_BUCKET_NAME = os.getenv("OSS_BUCKET_NAME", "smart-travel-yt")
@@ -120,7 +139,8 @@ OSS_SIGN_URL_EXPIRE_SECONDS = int(os.getenv("OSS_SIGN_URL_EXPIRE_SECONDS", "3153
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = env_bool("CORS_ALLOW_ALL_ORIGINS", DEBUG)
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS")
 
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],

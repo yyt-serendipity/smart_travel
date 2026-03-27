@@ -85,6 +85,7 @@ def _validate_oss_settings() -> None:
 
 @lru_cache(maxsize=1)
 def _get_oss_bucket():
+    # Uploads happen on hot request paths, so reuse a single bucket client per process.
     _validate_oss_settings()
     try:
         import oss2
@@ -106,6 +107,7 @@ def _write_oss_file(relative_path: str, content: bytes, content_type: str) -> st
 
 
 def save_uploaded_file(uploaded_file, *, folder: str, category: str) -> SavedUpload:
+    # Persist the raw upload to OSS and return a signed URL the frontend can save directly.
     suffix = ensure_upload_extension(uploaded_file.name, category)
     folder_name = _clean_folder_name(folder)
     relative_path = f"{folder_name}/{uuid4().hex}{suffix}"

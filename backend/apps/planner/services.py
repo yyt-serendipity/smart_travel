@@ -357,6 +357,7 @@ def resolve_spot_reference(raw_block: dict, attraction_pool: list[Attraction], f
 
 
 def normalize_llm_itinerary(raw_data: dict, city: TravelCity, attraction_pool: list[Attraction], duration_days: int) -> list[dict]:
+    # Frontend cards always expect morning/afternoon/evening blocks, so normalize every model response to that shape.
     raw_days = raw_data.get("itinerary") or raw_data.get("days") or []
     if not isinstance(raw_days, list):
         return []
@@ -424,6 +425,7 @@ def generate_itinerary_with_llm(city: TravelCity, interests: list[str], duration
     if not attraction_pool:
         raise PlannerGenerationError("当前城市缺少可供大模型编排的景点数据，已切换为规则规划。", stage="attraction_pool")
 
+    # Keep prompts bounded and spot references resolvable by exposing only a curated attraction subset.
     attraction_context = [
         {
             "id": item.id,
@@ -539,6 +541,7 @@ def build_ai_plan(payload: dict) -> dict:
     llm_result = None
     fallback_reason = ""
     failure_stage = ""
+    # Treat the LLM as optional: any config/request/parse failure falls back to deterministic rule planning.
     try:
         llm_result = generate_itinerary_with_llm(city, interests, duration_days, payload)
     except requests.RequestException as exc:

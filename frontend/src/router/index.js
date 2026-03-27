@@ -37,6 +37,7 @@ const router = createRouter({
   },
 });
 
+// Stop protected pages from mounting when the local auth state already tells us the route is invalid.
 router.beforeEach((to) => {
   if (to.meta.requiresAuth && !authState.token) {
     return { name: "login" };

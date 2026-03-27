@@ -69,6 +69,7 @@ def build_city_defaults(city_name: str, rows: list[tuple], source_file: str) -> 
             )
         )
 
+    # Build a usable city card straight from workbook content so the city list works after one import.
     return {
         "province": fit_text(infer_province(city_name, *addresses, *descriptions), 100),
         "destination_type": infer_destination_type(city_name),
@@ -105,6 +106,7 @@ def import_excel_file(
     city, _ = TravelCity.objects.update_or_create(name=city_name, defaults=city_defaults)
 
     seen_names = set()
+    # Use (city, attraction name) as the natural key so repeated imports refresh rows instead of duplicating them.
     for row in data_rows:
         attraction_name = fit_text(row[0], 200)
         seen_names.add(attraction_name)
@@ -127,6 +129,7 @@ def import_excel_file(
         Attraction.objects.update_or_create(city=city, name=attraction_name, defaults=defaults)
 
     if overwrite:
+        # In overwrite mode, the workbook becomes the source of truth for that city's attractions.
         city.attractions.exclude(name__in=seen_names).delete()
 
     compute_city_profile(city)

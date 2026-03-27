@@ -13,6 +13,7 @@ def _get_client_ip(request) -> str:
 
 
 def _serialize_target(target) -> dict:
+    # Some audit events point at plain dict payloads instead of Django model instances.
     if target is None:
         return {"target_type": "", "target_id": None, "target_name": ""}
     if isinstance(target, Mapping):
