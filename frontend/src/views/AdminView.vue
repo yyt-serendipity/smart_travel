@@ -485,7 +485,7 @@
             </div>
             <button class="btn btn-secondary" type="button" @click="handleDeletePost(post.id)">删除</button>
           </div>
-          <p class="muted clamp-4">{{ post.content }}</p>
+          <p class="muted clamp-4">{{ post.content_preview || post.content }}</p>
         </div>
       </div>
     </article>

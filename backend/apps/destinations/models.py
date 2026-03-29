@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -92,3 +93,27 @@ class TravelCityGeoCache(models.Model):
 
     def __str__(self) -> str:
         return f"{self.city.name} geo cache"
+
+
+class UserAttractionRecommendationSnapshot(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        related_name="attraction_recommendation_snapshot",
+        on_delete=models.CASCADE,
+    )
+    model_name = models.CharField(max_length=120, default="")
+    profile_signature = models.CharField(max_length=64, blank=True)
+    profile_payload = models.JSONField(default=dict, blank=True)
+    model_payload = models.JSONField(default=dict, blank=True)
+    results_payload = models.JSONField(default=list, blank=True)
+    recommendation_count = models.PositiveIntegerField(default=0)
+    needs_refresh = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = CORE_APP_LABEL
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:
+        return f"Recommendation snapshot for user {self.user_id}"

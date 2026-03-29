@@ -69,8 +69,9 @@
       <div class="title-row">
         <SectionHeader
           :title="overview.recommendation.spotlight_title"
-          description="优先展示更适合当前用户偏好和常住城市的景点卡片。"
+          :description="overview.recommendation.spotlight_description"
         />
+        <span v-if="personalizing" class="pill">正在更新个性化推荐</span>
         <RouterLink class="btn btn-secondary" to="/attractions">景点总览</RouterLink>
       </div>
 
@@ -91,7 +92,7 @@
       <div class="title-row">
         <SectionHeader
           :title="overview.recommendation.city_title"
-          description="从城市热度、景点密度和标签风格里挑出更值得先看的入口城市。"
+          :description="overview.recommendation.city_description"
         />
         <RouterLink class="btn btn-secondary" to="/cities">全部城市</RouterLink>
       </div>
@@ -130,8 +131,10 @@ import PostCard from "../components/PostCard.vue";
 import SectionHeader from "../components/SectionHeader.vue";
 import HomeHeroCarousel from "../components/home/HomeHeroCarousel.vue";
 import { getOverview } from "../services/api";
+import { authState } from "../stores/auth";
 
 const loading = ref(true);
+const personalizing = ref(false);
 const overview = ref({
   hero: {
     title: "围绕中国城市、景点与旅行内容建立的智能旅游平台",
@@ -149,7 +152,9 @@ const overview = ref({
     home_city: null,
     favorite_styles: [],
     spotlight_title: "热门景点精选",
+    spotlight_description: "先展示默认 TOPSIS 推荐。",
     city_title: "城市推荐",
+    city_description: "先展示默认城市入口。",
   },
   featured_cities: [],
   spotlight_attractions: [],
@@ -179,7 +184,18 @@ function provinceCoverStyle(province) {
 
 onMounted(async () => {
   try {
-    overview.value = await getOverview();
+    overview.value = await getOverview({ mode: "default" });
+    loading.value = false;
+    if (authState.token) {
+      personalizing.value = true;
+      try {
+        overview.value = await getOverview({ mode: "personalized" });
+      } catch (error) {
+        console.error("Failed to load personalized home recommendations.", error);
+      } finally {
+        personalizing.value = false;
+      }
+    }
   } finally {
     loading.value = false;
   }

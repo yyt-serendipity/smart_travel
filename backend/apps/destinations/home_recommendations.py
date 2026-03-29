@@ -6,8 +6,14 @@ from decimal import Decimal
 from django.db.models import Count
 
 from apps.community.models import TravelPost
+from apps.destinations.attraction_recommendations import (
+    MODEL_NAME,
+    UserPreferenceProfile,
+    build_attraction_recommendation_bundle,
+    serialize_profile,
+)
 from apps.destinations.models import Attraction, TravelCity
-from apps.users.services import ensure_user_profile, serialize_home_city
+from apps.users.services import serialize_home_city
 
 
 STYLE_KEYWORDS = {
@@ -145,16 +151,6 @@ def build_home_province_cards(limit: int = 12) -> list[dict]:
     return cards
 
 
-def get_personalization_context(user):
-    if not user or not user.is_authenticated:
-        return None, None, []
-
-    profile = ensure_user_profile(user)
-    home_city = profile.home_city_ref
-    favorite_styles = [style for style in (profile.favorite_styles or []) if style]
-    return profile, home_city, favorite_styles
-
-
 def count_style_hits(text: str, favorite_styles: list[str]) -> tuple[int, list[str]]:
     matched_styles = []
     for style in favorite_styles:
@@ -212,58 +208,62 @@ def score_city(city: TravelCity, home_city: TravelCity | None, favorite_styles: 
     return score, matched_styles
 
 
-def score_attraction(attraction: Attraction, home_city: TravelCity | None, favorite_styles: list[str]) -> tuple[float, list[str]]:
-    text = attraction_text_blob(attraction)
-    style_hits, matched_styles = count_style_hits(text, favorite_styles)
-    score = float(attraction.rating or 0) * 12
-    score += style_hits * 22
+def build_recommendation_copy(recommendation_profile, model_name: str) -> dict:
+    home_city = recommendation_profile.home_city
+    display_styles = recommendation_profile.explicit_styles or recommendation_profile.top_styles
 
-    if home_city and attraction.city_id:
-        if attraction.city_id == home_city.id:
-            score += 12
-        elif attraction.city.province and attraction.city.province == home_city.province:
-            score += 10
-
-    if attraction.image_url:
-        score += 2
-    if attraction.imported_from_excel:
-        score += 1
-
-    return score, matched_styles
-
-
-def build_recommendation_copy(home_city: TravelCity | None, favorite_styles: list[str]) -> dict:
-    if not home_city and not favorite_styles:
+    if not recommendation_profile.is_personalized:
         return {
             "is_personalized": False,
             "home_city": None,
             "favorite_styles": [],
             "spotlight_title": "热门景点精选",
-            "spotlight_description": "按评分、内容完整度和热度整理全国范围内值得先看的景点。",
+            "spotlight_description": "使用 TOPSIS 综合评分模型，按景点质量、内容完整度和城市热度做排序。",
             "city_title": "全国目的地推荐",
             "city_description": "优先展示适合直接进入城市详情、继续看景点与社区内容的热门城市。",
+            "model_name": model_name,
+            "profile_summary": {
+                "top_styles": [],
+                "evidence": [],
+                "activity_summary": recommendation_profile.activity_summary,
+            },
         }
 
-    style_text = "、".join(favorite_styles[:3]) if favorite_styles else "你的旅行偏好"
+    style_text = "、".join(display_styles[:3]) if display_styles else "你的旅行偏好"
     if home_city:
         return {
             "is_personalized": True,
             "home_city": serialize_home_city(home_city),
-            "favorite_styles": favorite_styles,
+            "favorite_styles": display_styles,
             "spotlight_title": "为你定制的景点推荐",
-            "spotlight_description": f"结合常住城市 {home_city.name} 和偏好风格 {style_text} 做了优先排序。",
+            "spotlight_description": (
+                f"结合常住城市 {home_city.name}、偏好风格 {style_text} 与社区互动行为，"
+                "通过 TOPSIS 多指标评分做了优先排序。"
+            ),
             "city_title": "更贴近你的城市灵感",
             "city_description": f"优先考虑 {home_city.province or home_city.name} 周边与符合你风格的城市内容。",
+            "model_name": model_name,
+            "profile_summary": {
+                "top_styles": display_styles[:3],
+                "evidence": recommendation_profile.evidence,
+                "activity_summary": recommendation_profile.activity_summary,
+            },
         }
 
     return {
         "is_personalized": True,
         "home_city": None,
-        "favorite_styles": favorite_styles,
+        "favorite_styles": display_styles,
         "spotlight_title": "按你的偏好推荐景点",
-        "spotlight_description": f"根据你选择的 {style_text} 做了首页景点排序。",
+        "spotlight_description": f"根据画像提取出的 {style_text} 偏好，并通过 TOPSIS 做了首页景点排序。",
         "city_title": "按风格筛过的城市推荐",
         "city_description": "城市和景点都会优先匹配你在个人主页里选择的旅行风格。",
+        "model_name": model_name,
+        "profile_summary": {
+            "top_styles": display_styles[:3],
+            "evidence": recommendation_profile.evidence,
+            "activity_summary": recommendation_profile.activity_summary,
+        },
     }
 
 
@@ -289,27 +289,17 @@ def pick_featured_cities(home_city: TravelCity | None, favorite_styles: list[str
     return ranked[:8]
 
 
-def pick_spotlight_attractions(home_city: TravelCity | None, favorite_styles: list[str]) -> list[Attraction]:
-    if not home_city and not favorite_styles:
-        return list(Attraction.objects.select_related("city").order_by("-rating", "name")[:8])
+def pick_default_spotlight_attractions(limit: int = 8) -> list[Attraction]:
+    return list(Attraction.objects.select_related("city").order_by("-rating", "name")[:limit])
 
-    candidates = list(Attraction.objects.select_related("city").order_by("-rating", "name")[:800])
-    ranked = []
-    for attraction in candidates:
-        score, matched_styles = score_attraction(attraction, home_city, favorite_styles)
-        attraction.personalized_score = score
-        attraction.matched_styles = matched_styles
-        ranked.append(attraction)
 
-    ranked.sort(
-        key=lambda item: (
-            getattr(item, "personalized_score", 0),
-            float(item.rating or 0),
-            item.city.attraction_count if item.city_id else 0,
-        ),
-        reverse=True,
-    )
-    return ranked[:8]
+def pick_spotlight_attractions(user=None, *, limit: int = 8) -> dict:
+    bundle = build_attraction_recommendation_bundle(user, limit=limit)
+    attractions = [row["attraction"] for row in bundle["results"]]
+    return {
+        "bundle": bundle,
+        "attractions": attractions or pick_default_spotlight_attractions(limit),
+    }
 
 
 def pick_latest_posts() -> list[TravelPost]:
@@ -319,6 +309,23 @@ def pick_latest_posts() -> list[TravelPost]:
         .filter(status=TravelPost.STATUS_PUBLISHED)
         .order_by("-created_at")[:6]
     )
+
+
+def build_default_home_spotlight(limit: int = 8) -> dict:
+    profile = UserPreferenceProfile(activity_summary={})
+    attractions = pick_default_spotlight_attractions(limit)
+    return {
+        "bundle": {
+            "profile": profile,
+            "model": {
+                "name": "default_home_fallback_v1",
+                "algorithm": "rating_heat_fallback",
+                "criteria": [],
+                "candidate_count": len(attractions),
+            },
+        },
+        "attractions": attractions,
+    }
 
 
 def build_story_sections(home_city: TravelCity | None, favorite_styles: list[str]) -> list[dict]:
@@ -352,12 +359,23 @@ def build_story_sections(home_city: TravelCity | None, favorite_styles: list[str
     return base_sections
 
 
-def build_home_payload(user=None) -> dict:
-    _, home_city, favorite_styles = get_personalization_context(user)
-    recommendation = build_recommendation_copy(home_city, favorite_styles)
+def build_home_payload(user=None, *, recommendation_mode: str = "default") -> dict:
+    mode = "personalized" if recommendation_mode == "personalized" and user and user.is_authenticated else "default"
+    spotlight = pick_spotlight_attractions(user, limit=8) if mode == "personalized" else build_default_home_spotlight(limit=8)
+    recommendation_profile = spotlight["bundle"]["profile"]
+    home_city = recommendation_profile.home_city if mode == "personalized" else None
+    favorite_styles = (recommendation_profile.explicit_styles or recommendation_profile.top_styles) if mode == "personalized" else []
+    recommendation = build_recommendation_copy(recommendation_profile, MODEL_NAME)
+    recommendation["request_mode"] = mode
+    recommendation["can_personalize"] = bool(user and user.is_authenticated)
+    recommendation["is_default_stage"] = mode == "default"
+    if mode == "default":
+        recommendation["spotlight_description"] = "先展示默认热门景点推荐，个性化结果将在后台补充。"
+        recommendation["city_description"] = "先按城市热度、景点密度和基础评分展示默认城市入口。"
     latest_posts = pick_latest_posts()
     stats = build_home_stats()
     stats["latestPostCount"] = len(latest_posts)
+    featured_cities = pick_featured_cities(home_city, favorite_styles) or pick_featured_cities(None, [])
 
     return {
         "hero": {
@@ -368,8 +386,10 @@ def build_home_payload(user=None) -> dict:
         "stats": stats,
         "province_cards": build_home_province_cards(limit=12),
         "recommendation": recommendation,
-        "featured_cities": pick_featured_cities(home_city, favorite_styles),
-        "spotlight_attractions": pick_spotlight_attractions(home_city, favorite_styles),
+        "featured_cities": featured_cities,
+        "spotlight_attractions": spotlight["attractions"],
+        "spotlight_model": spotlight["bundle"]["model"],
+        "spotlight_profile": serialize_profile(recommendation_profile),
         "latest_posts": latest_posts,
         "story_sections": build_story_sections(home_city, favorite_styles),
     }

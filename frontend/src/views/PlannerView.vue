@@ -1,13 +1,9 @@
-<template>
+﻿<template>
   <section class="page planner-page">
     <div class="planner-shell">
       <article class="card planner-control-panel">
         <div class="planner-hero-card">
           <h1>AI 旅行规划</h1>
-          <p class="planner-hero-copy">
-            先用城市与景点数据库做约束，再交给模型生成可落地的逐日行程。
-            如果大模型不可用，系统会自动回退到规则规划。
-          </p>
         </div>
 
         <form class="planner-form" @submit.prevent="handleSubmit">
@@ -80,7 +76,7 @@
 
           <section class="planner-form-section">
             <div class="planner-section-head">
-              <span>旅程参数</span>
+              <span>行程参数</span>
               <strong>决定预算、节奏和同行方式</strong>
             </div>
 
@@ -144,6 +140,27 @@
             </div>
           </section>
 
+          <section class="planner-form-section">
+            <div class="planner-section-head">
+              <span>生成方式</span>
+              <strong>选择千问直连，或使用数据库 Agent 规划</strong>
+            </div>
+
+            <div class="planner-mode-select-grid">
+              <button
+                v-for="item in planningModes"
+                :key="item.value"
+                class="planner-mode-card"
+                :class="{ active: form.mode === item.value }"
+                type="button"
+                @click="form.mode = item.value"
+              >
+                <strong>{{ item.label }}</strong>
+                <p>{{ item.description }}</p>
+              </button>
+            </div>
+          </section>
+
           <section class="planner-form-section planner-form-footer">
             <p class="planner-subtle-note">目标城市、出发城市和兴趣越明确，生成结果越稳定。</p>
 
@@ -164,9 +181,10 @@
           <div>
             <p class="planner-eyebrow">Result Console</p>
             <h2>生成结果</h2>
-            <p class="muted">预算、必去点位与逐日动线会先展示，推荐城市放在结果底部作为备选。</p>
+            <p class="muted">预算、必去点位与逐日动线会优先展示，推荐城市放在结果底部作为备选。</p>
           </div>
           <div v-if="result" class="planner-mode-badges">
+            <span class="pill">{{ plannerStrategyLabel }}</span>
             <span class="pill">{{ plannerModeLabel }}</span>
             <span class="pill" v-if="result.planner_model">{{ result.planner_model }}</span>
           </div>
@@ -216,6 +234,10 @@
                 <strong>RMB {{ result.estimated_budget }}</strong>
               </div>
               <div class="planner-summary-pill">
+                <span>方案</span>
+                <strong>{{ plannerStrategyLabel }}</strong>
+              </div>
+              <div class="planner-summary-pill">
                 <span>引擎</span>
                 <strong>{{ plannerModeLabel }}</strong>
               </div>
@@ -236,7 +258,7 @@
               <p class="planner-eyebrow">Target City</p>
               <h3>{{ result.city.name }}</h3>
               <p class="muted">
-                {{ result.city.province || "中国" }} · {{ result.city.recommended_days || form.duration_days }} 天建议游玩 ·
+                {{ result.city.province || "中国" }} | {{ result.city.recommended_days || form.duration_days }} 天建议游玩 |
                 {{ result.city.attraction_count || 0 }} 个景点
               </p>
               <div class="planner-tag-row">
@@ -259,7 +281,7 @@
             <div class="planner-stat-card">
               <span>推荐备选</span>
               <strong>{{ result.recommended_cities.length }}</strong>
-              <p>相近主题或同省的候选城市</p>
+              <p>相近主题或同省的备选城市</p>
             </div>
             <div class="planner-stat-card">
               <span>打包清单</span>
@@ -381,7 +403,6 @@ import { RouterLink, useRoute } from "vue-router";
 import CityCard from "../components/CityCard.vue";
 import { generatePlan, getCities } from "../services/api";
 
-
 const route = useRoute();
 const loading = ref(false);
 const result = ref(null);
@@ -394,7 +415,19 @@ const departureMenuOpen = ref(false);
 const loadingStepIndex = ref(0);
 
 const defaultInterests = ["自然风光", "美食"];
-const interestOptions = ["自然风光", "人文古迹", "亲子休闲", "户外徒步", "摄影", "美食"];
+const interestOptions = ["自然风光", "人文古迹", "亲子休闲", "户外徒步", "摄影出片", "美食"];
+const planningModes = [
+  {
+    value: "agent",
+    label: "数据库 Agent",
+    description: "优先依据站内城市和景点库规划，约束更强，结果更贴近系统数据。",
+  },
+  {
+    value: "qwen",
+    label: "千问直连",
+    description: "直接走千问通用规划能力，表达更开放，但会更依赖模型生成。",
+  },
+];
 const budgetLabels = {
   transport: "交通",
   tickets: "门票",
@@ -436,22 +469,32 @@ const defaultFormState = () => ({
   budget_level: "balanced",
   companions: "朋友结伴",
   interests: [...defaultInterests],
+  mode: "agent",
 });
 
 const form = reactive(defaultFormState());
 
 const submitDisabled = computed(() => loading.value || !targetKeyword.value.trim() || !departureKeyword.value.trim());
 const loadingStep = computed(() => loadingSteps[loadingStepIndex.value] || loadingSteps[0]);
+const plannerStrategyLabel = computed(() => {
+  if (!result.value) {
+    return form.mode === "qwen" ? "千问直连" : "数据库 Agent";
+  }
+  return result.value.planner_strategy === "qwen" ? "千问直连" : "数据库 Agent";
+});
 const plannerModeLabel = computed(() => {
   if (!result.value) return "";
   if (result.value.used_fallback) {
     return "规则兜底";
   }
+  if (result.value.planner_mode === "database_agent") {
+    return "数据库 Agent 执行";
+  }
+  if (result.value.planner_mode === "qwen_direct") {
+    return "千问直连执行";
+  }
   if (result.value.planner_provider === "qwen") {
     return "千问生成";
-  }
-  if (result.value.planner_mode === "llm") {
-    return "大模型生成";
   }
   if (result.value.planner_mode === "failed") {
     return "生成失败";
@@ -551,6 +594,7 @@ function buildRequestPayload() {
     budget_level: form.budget_level,
     companions: form.companions,
     interests: form.interests.length ? [...form.interests] : [...defaultInterests],
+    mode: form.mode,
   };
   const matchedCity = cityOptions.value.find((item) => item.name === payload.target_city);
   if (matchedCity) {
@@ -607,7 +651,7 @@ watch(departureKeyword, (value) => {
 watch(
   () => route.query,
   (query) => {
-    if (query.targetCity) {
+    if (typeof query.targetCity === "string") {
       targetKeyword.value = query.targetCity;
       form.target_city = query.targetCity;
       return;
@@ -626,7 +670,6 @@ onBeforeUnmount(() => {
   stopLoadingTicker();
 });
 </script>
-
 <style scoped>
 .planner-page {
   gap: 24px;
@@ -823,6 +866,51 @@ onBeforeUnmount(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.planner-mode-select-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.planner-mode-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid rgba(17, 57, 68, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.planner-mode-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(10, 94, 99, 0.22);
+}
+
+.planner-mode-card strong,
+.planner-mode-card p {
+  margin: 0;
+}
+
+.planner-mode-card p {
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.planner-mode-card.active {
+  border-color: transparent;
+  color: white;
+  background: linear-gradient(135deg, rgba(18, 57, 74, 0.98), rgba(10, 94, 99, 0.92) 56%, rgba(223, 127, 50, 0.88));
+}
+
+.planner-mode-card.active p {
+  color: rgba(255, 247, 238, 0.82);
 }
 
 .planner-interest-chip {
@@ -1266,12 +1354,30 @@ onBeforeUnmount(() => {
   .planner-summary-hero,
   .planner-loading-hero,
   .planner-city-hero,
-  .planner-bento-grid,
+  .planner-bento-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .planner-stat-grid,
   .planner-block-grid,
   .planner-spot-grid,
+  .planner-loading-step-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .planner-loading-hero,
   .planner-stat-grid,
+  .planner-block-grid,
+  .planner-spot-grid,
   .planner-loading-step-grid {
     grid-template-columns: 1fr;
+  }
+
+  .planner-result-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 
@@ -1282,8 +1388,22 @@ onBeforeUnmount(() => {
     border-radius: 24px;
   }
 
+  .planner-hero-card,
+  .planner-form-section,
+  .planner-loading-hero,
+  .planner-summary-hero,
+  .planner-day-card,
+  .planner-bento-card {
+    padding: 18px;
+  }
+
   .planner-field-grid,
-  .planner-city-hero {
+  .planner-city-hero,
+  .planner-stat-grid,
+  .planner-block-grid,
+  .planner-spot-grid,
+  .planner-loading-step-grid,
+  .planner-mode-select-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1295,7 +1415,42 @@ onBeforeUnmount(() => {
   }
 
   .planner-summary-meta {
+    display: grid;
+    width: 100%;
     justify-content: flex-start;
+  }
+
+  .planner-summary-pill,
+  .planner-submit-row .btn,
+  .planner-submit-button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .planner-submit-row,
+  .planner-card-head,
+  .planner-block-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .planner-search-option {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .planner-loading-orbit {
+    width: 112px;
+    height: 112px;
+  }
+
+  .planner-empty-state {
+    min-height: 260px;
   }
 }
 </style>
+
+
+
+
+

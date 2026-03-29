@@ -72,16 +72,36 @@
             </div>
 
             <div class="post-article-block">
-              <p class="post-content">{{ post.content }}</p>
+              <RichTextContent class="post-content" variant="detail" :html="post.content" :empty-text="post.content_preview" />
             </div>
 
             <div class="post-actions post-actions-elevated">
               <div class="post-action-group">
-                <button class="btn btn-primary" type="button" :disabled="!authState.user" @click="handleLike">
-                  {{ post.liked ? "已点赞" : "点赞" }} {{ post.likes_count }}
+                <button
+                  class="btn btn-primary detail-icon-button"
+                  :class="{ active: post.liked, pending: post.likePending }"
+                  type="button"
+                  :disabled="!authState.user || post.likePending"
+                  aria-label="点赞帖子"
+                  @click="handleLike"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12.6 20.1 5.8 13.7a4.5 4.5 0 0 1 6.3-6.4L12 7.5l-.1-.2a4.5 4.5 0 0 1 6.3 6.4l-6.8 6.4a.6.6 0 0 1-.8 0Z" />
+                  </svg>
+                  <span>{{ post.likePending ? "处理中..." : post.liked ? "已点赞" : "点赞" }} {{ post.likes_count }}</span>
                 </button>
-                <button class="btn btn-secondary" type="button" :disabled="!authState.user" @click="handleFavorite">
-                  {{ post.favorited ? "已收藏" : "收藏" }} {{ post.favorite_count }}
+                <button
+                  class="btn btn-secondary detail-icon-button"
+                  :class="{ active: post.favorited, pending: post.favoritePending }"
+                  type="button"
+                  :disabled="!authState.user || post.favoritePending"
+                  aria-label="收藏帖子"
+                  @click="handleFavorite"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M6 4.5h12a1 1 0 0 1 1 1v14.2a.5.5 0 0 1-.8.4L12 15.3l-6.2 4.8a.5.5 0 0 1-.8-.4V5.5a1 1 0 0 1 1-1Z" />
+                  </svg>
+                  <span>{{ post.favoritePending ? "处理中..." : post.favorited ? "已收藏" : "收藏" }} {{ post.favorite_count }}</span>
                 </button>
               </div>
               <span class="muted">{{ authState.user ? "登录状态下可直接点赞、收藏和评论。" : "登录后可以点赞、收藏和评论。" }}</span>
@@ -103,15 +123,13 @@
               </div>
               <div class="timeline-item">
                 <strong>互动情况</strong>
-                <p class="muted">
-                  浏览 {{ post.views_count }}，点赞 {{ post.likes_count }}，收藏 {{ post.favorite_count }}，评论 {{ totalComments }}
-                </p>
+                <p class="muted">浏览 {{ post.views_count }}，点赞 {{ post.likes_count }}，收藏 {{ post.favorite_count }}，评论 {{ totalComments }}</p>
               </div>
             </div>
           </article>
 
           <article class="card section-shell">
-            <SectionHeader title="继续浏览" description="从帖子回到社区或继续看景点详情。" />
+            <SectionHeader title="继续浏览" description="从帖子回到社区，或继续查看景点详情。" />
             <div class="grid" style="margin-top: 20px">
               <RouterLink v-if="post.city_detail" class="btn btn-secondary" :to="{ name: 'community', query: { cityId: post.city_detail.id } }">
                 看同城更多内容
@@ -177,14 +195,20 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, watchEffect } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 
 import PageBackButton from "../components/PageBackButton.vue";
+import RichTextContent from "../components/RichTextContent.vue";
 import SectionHeader from "../components/SectionHeader.vue";
-import { addComment, getPost, toggleFavorite, toggleLike } from "../services/api";
+import { addComment, getPost } from "../services/api";
 import { authState } from "../stores/auth";
-
+import {
+  getPostEngagement,
+  resolvePostEngagement,
+  togglePostFavorite,
+  togglePostLike,
+} from "../stores/postEngagement";
 
 const route = useRoute();
 const post = ref(null);
@@ -218,7 +242,16 @@ async function loadPost(id = route.params.id) {
   try {
     const data = await getPost(id);
     if (currentRequestId !== requestId) return;
-    post.value = data;
+    const engagement = resolvePostEngagement(data);
+    post.value = {
+      ...data,
+      liked: engagement.liked,
+      favorited: engagement.favorited,
+      likes_count: engagement.likes_count,
+      favorite_count: engagement.favorite_count,
+      likePending: engagement.likePending,
+      favoritePending: engagement.favoritePending,
+    };
   } catch (error) {
     if (currentRequestId !== requestId) return;
     errorMessage.value = error.response?.data?.detail || "帖子详情加载失败。";
@@ -229,29 +262,52 @@ async function loadPost(id = route.params.id) {
   }
 }
 
+watchEffect(() => {
+  const currentPost = post.value;
+  if (!currentPost?.id) return;
+
+  const entry = getPostEngagement(currentPost.id);
+  if (!entry) return;
+
+  currentPost.liked = entry.liked;
+  currentPost.likes_count = entry.likes_count;
+  currentPost.favorited = entry.favorited;
+  currentPost.favorite_count = entry.favorite_count;
+  currentPost.likePending = entry.likePending;
+  currentPost.favoritePending = entry.favoritePending;
+});
+
 async function handleLike() {
-  if (!authState.user) return;
-  const data = await toggleLike(route.params.id);
-  post.value = {
-    ...post.value,
-    liked: data.liked,
-    likes_count: data.likes_count,
-  };
+  if (!authState.user || !post.value?.id || post.value.likePending) return;
+  try {
+    await togglePostLike(post.value.id);
+  } catch (error) {
+    console.error("Failed to toggle post like", error);
+  }
 }
 
 async function handleFavorite() {
-  if (!authState.user) return;
-  const data = await toggleFavorite(route.params.id);
-  post.value = {
-    ...post.value,
-    favorited: data.favorited,
-    favorite_count: data.favorite_count,
-  };
+  if (!authState.user || !post.value?.id || post.value.favoritePending) return;
+  try {
+    await togglePostFavorite(post.value.id);
+  } catch (error) {
+    console.error("Failed to toggle post favorite", error);
+  }
 }
 
 async function handleComment() {
   if (!authState.user || !commentContent.value) return;
-  post.value = await addComment(route.params.id, { content: commentContent.value });
+  const detail = await addComment(route.params.id, { content: commentContent.value });
+  const engagement = resolvePostEngagement(detail);
+  post.value = {
+    ...detail,
+    liked: engagement.liked,
+    favorited: engagement.favorited,
+    likes_count: engagement.likes_count,
+    favorite_count: engagement.favorite_count,
+    likePending: engagement.likePending,
+    favoritePending: engagement.favoritePending,
+  };
   commentContent.value = "";
 }
 
@@ -264,3 +320,55 @@ watch(
   { immediate: true },
 );
 </script>
+
+<style scoped>
+.detail-icon-button {
+  gap: 8px;
+  transition: transform 0.18s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.detail-icon-button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(10, 68, 73, 0.14);
+}
+
+.detail-icon-button svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.detail-icon-button svg path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  transition: transform 0.18s ease, fill 0.18s ease, stroke 0.18s ease;
+  transform-origin: center;
+}
+
+.detail-icon-button:not(:disabled):hover svg path {
+  transform: scale(1.12);
+}
+
+.detail-icon-button.active svg path {
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.detail-icon-button.pending {
+  opacity: 0.82;
+}
+
+.post-article-block {
+  padding: 24px;
+  border: 1px solid rgba(13, 92, 99, 0.08);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.post-content {
+  min-height: 0;
+}
+</style>

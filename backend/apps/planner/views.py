@@ -7,6 +7,7 @@ from apps.core.activity import log_operation
 from apps.destinations.serializers import TravelCityListSerializer
 from apps.planner.models import TravelPlan
 from apps.planner.serializers import TravelPlanSerializer
+from apps.planner.assistant_services import build_assistant_reply
 from apps.planner.services import build_ai_plan
 
 
@@ -52,6 +53,7 @@ class PlannerGenerateAPIView(APIView):
             "companions": request.data.get("companions", "双人"),
             "interests": parse_interest_list(request.data.get("interests", [])),
             "season_hint": request.data.get("season_hint", ""),
+            "mode": request.data.get("mode", "agent"),
         }
         result = build_ai_plan(payload)
         if not result.get("success", True):
@@ -90,6 +92,7 @@ class PlannerGenerateAPIView(APIView):
             "packing_list": result["packing_list"],
             "itinerary": result["itinerary"],
             "planner_mode": result["planner_mode"],
+            "planner_strategy": result.get("planner_strategy", payload["mode"]),
             "planner_provider": result.get("planner_provider", "rule"),
             "planner_model": result.get("planner_model", ""),
             "matched_city_name": result["matched_city_name"],
@@ -119,7 +122,11 @@ class PlannerGenerateAPIView(APIView):
                 "planner",
                 "generate-plan",
                 target=plan,
-                detail={"planner_mode": result["planner_mode"], "target_city": result["matched_city_name"]},
+                detail={
+                    "planner_mode": result["planner_mode"],
+                    "planner_strategy": result.get("planner_strategy", payload["mode"]),
+                    "target_city": result["matched_city_name"],
+                },
             )
         else:
             log_operation(
@@ -127,7 +134,37 @@ class PlannerGenerateAPIView(APIView):
                 "planner",
                 "generate-plan",
                 target=city,
-                detail={"planner_mode": result["planner_mode"], "target_city": result["matched_city_name"]},
+                detail={
+                    "planner_mode": result["planner_mode"],
+                    "planner_strategy": result.get("planner_strategy", payload["mode"]),
+                    "target_city": result["matched_city_name"],
+                },
             )
 
         return Response(response_payload, status=status.HTTP_200_OK)
+
+
+class AssistantChatAPIView(APIView):
+    """POST /api/assistant/chat/ 提供千问直连与数据库 Agent 两种问答模式。"""
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        payload = {
+            "mode": request.data.get("mode", "agent"),
+            "messages": request.data.get("messages", []),
+        }
+        result = build_assistant_reply(payload)
+        log_operation(
+            request,
+            "assistant",
+            "chat",
+            target={"type": "assistant", "mode": result["mode"]},
+            detail={
+                "mode": result["mode"],
+                "engine": result["engine"],
+                "used_fallback": result["used_fallback"],
+                "references": [item["name"] for item in result["references"][:4]],
+            },
+        )
+        return Response(result, status=status.HTTP_200_OK)

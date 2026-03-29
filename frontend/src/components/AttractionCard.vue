@@ -170,4 +170,26 @@ const imageStyle = computed(() => ({
   margin-bottom: 6px;
   min-width: 170px;
 }
+
+@media (max-width: 720px) {
+  .attraction-image,
+  .attraction-image-overlay {
+    min-height: 188px;
+  }
+
+  .attraction-card-body {
+    min-height: auto;
+    gap: 16px;
+  }
+
+  .attraction-card-summary {
+    min-height: auto;
+  }
+
+  .attraction-card-action {
+    width: 100%;
+    min-width: 0;
+    align-self: stretch;
+  }
+}
 </style>

@@ -120,4 +120,21 @@ const coverStyle = computed(() => ({
   justify-self: center;
   margin-top: auto;
 }
+
+@media (max-width: 720px) {
+  .city-cover {
+    min-height: 168px;
+    padding: 16px;
+  }
+
+  .city-card-body {
+    min-height: auto;
+    gap: 16px;
+  }
+
+  .city-card-action {
+    width: 100%;
+    justify-self: stretch;
+  }
+}
 </style>

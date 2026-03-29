@@ -1,4 +1,5 @@
 import { reactive } from "vue";
+import { resetPostEngagement } from "./postEngagement";
 
 
 const storedUser = localStorage.getItem("smart_journey_user");
@@ -10,6 +11,7 @@ export const authState = reactive({
 
 
 export function setAuth(token, user) {
+  resetPostEngagement();
   authState.token = token;
   authState.user = user;
   localStorage.setItem("smart_journey_token", token);
@@ -18,6 +20,7 @@ export function setAuth(token, user) {
 
 
 export function clearAuth() {
+  resetPostEngagement();
   authState.token = "";
   authState.user = null;
   localStorage.removeItem("smart_journey_token");

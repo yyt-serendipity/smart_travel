@@ -58,7 +58,6 @@ def build_remote_env(local_env: dict[str, str], host: str, db_name: str, db_user
         f"CSRF_TRUSTED_ORIGINS=http://{host}",
         "CORS_ALLOW_ALL_ORIGINS=False",
         f"CORS_ALLOWED_ORIGINS=http://{host}",
-        "DB_ENGINE=mysql",
         f"DB_NAME={db_name}",
         f"DB_USER={db_user}",
         f"DB_PASSWORD={db_password}",

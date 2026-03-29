@@ -9,6 +9,11 @@ from rest_framework.views import APIView
 
 from apps.community.serializers import TravelPostListSerializer
 from apps.destinations.amap import AMapServiceError, fetch_city_static_map, fetch_city_weather
+from apps.destinations.attraction_recommendations import (
+    build_attraction_recommendation_bundle,
+    serialize_profile,
+    serialize_recommendation_results,
+)
 from apps.destinations.home_recommendations import build_home_payload
 from apps.destinations.models import Attraction, TravelCity
 from apps.destinations.serializers import (
@@ -32,7 +37,8 @@ class HomeOverviewAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        payload = build_home_payload(request.user)
+        mode = str(request.query_params.get("mode") or "default").strip().lower()
+        payload = build_home_payload(request.user, recommendation_mode=mode)
         return Response(
             {
                 **payload,
@@ -138,3 +144,20 @@ class AttractionViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_serializer_class(self):
         return AttractionDetailSerializer if self.action == "retrieve" else AttractionSerializer
+
+    @action(detail=False, methods=["get"])
+    def recommend(self, request):
+        try:
+            limit = int(request.query_params.get("limit", 8))
+        except (TypeError, ValueError):
+            limit = 8
+        limit = max(1, min(limit, 20))
+
+        bundle = build_attraction_recommendation_bundle(request.user, limit=limit)
+        return Response(
+            {
+                "profile": serialize_profile(bundle["profile"]),
+                "model": bundle["model"],
+                "results": serialize_recommendation_results(bundle["results"], AttractionSerializer),
+            }
+        )

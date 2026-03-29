@@ -410,13 +410,33 @@ watch(() => route.params.id, loadCity, { immediate: true });
   object-fit: cover;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 960px) {
   .city-weather-grid {
     grid-template-columns: 1fr;
   }
 
   .city-weather-now {
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .city-weather-panel,
+  .city-map-panel {
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .city-weather-now {
+    flex-direction: column;
+  }
+
+  .city-map-link {
+    width: 100%;
+  }
+
+  .city-static-map-frame {
+    min-height: 180px;
   }
 }
 </style>

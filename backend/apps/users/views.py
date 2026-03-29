@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 
 from apps.core.activity import log_operation
 from apps.core.media_utils import save_uploaded_file
+from apps.destinations.attraction_recommendations import mark_recommendation_snapshot_dirty
 from apps.users.serializers import LoginSerializer, RegisterSerializer, UserProfileSerializer
 from apps.users.services import ensure_user_profile, serialize_user
 
@@ -22,6 +23,7 @@ class RegisterAPIView(APIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         ensure_user_profile(user)
+        mark_recommendation_snapshot_dirty(user)
         token, _ = Token.objects.get_or_create(user=user)
         log_operation(request, "auth", "register", target=user, detail={"username": user.username})
         return Response({"token": token.key, "user": serialize_user(user)}, status=status.HTTP_201_CREATED)
@@ -83,6 +85,7 @@ class ProfileAPIView(APIView):
         serializer = UserProfileSerializer(profile, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        mark_recommendation_snapshot_dirty(request.user)
         log_operation(
             request,
             "profile",

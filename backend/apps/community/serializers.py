@@ -1,6 +1,7 @@
 from rest_framework import serializers
 
 from apps.community.models import PostComment, PostFavorite, PostLike, TravelPost
+from apps.community.services import build_post_excerpt, sanitize_post_content
 from apps.core.tagging import normalize_public_tags
 from apps.destinations.serializers import AttractionSerializer, TravelCityListSerializer
 from apps.users.services import serialize_user
@@ -53,6 +54,7 @@ class TravelPostListSerializer(serializers.ModelSerializer):
     favorite_count = serializers.SerializerMethodField()
     liked = serializers.SerializerMethodField()
     favorited = serializers.SerializerMethodField()
+    content_preview = serializers.SerializerMethodField()
 
     class Meta:
         model = TravelPost
@@ -65,6 +67,7 @@ class TravelPostListSerializer(serializers.ModelSerializer):
             "attraction_name",
             "title",
             "content",
+            "content_preview",
             "cover_image",
             "tags",
             "likes_count",
@@ -85,6 +88,9 @@ class TravelPostListSerializer(serializers.ModelSerializer):
     def get_favorite_count(self, obj):
         return getattr(obj, "favorite_count", obj.favorites.count())
 
+    def get_content_preview(self, obj):
+        return build_post_excerpt(obj.content)
+
     def get_liked(self, obj):
         request = self.context.get("request")
         return is_post_liked(obj, getattr(request, "user", None))
@@ -102,6 +108,7 @@ class TravelPostDetailSerializer(serializers.ModelSerializer):
     favorite_count = serializers.SerializerMethodField()
     liked = serializers.SerializerMethodField()
     favorited = serializers.SerializerMethodField()
+    content_preview = serializers.SerializerMethodField()
 
     class Meta:
         model = TravelPost
@@ -114,6 +121,7 @@ class TravelPostDetailSerializer(serializers.ModelSerializer):
             "attraction_detail",
             "title",
             "content",
+            "content_preview",
             "cover_image",
             "tags",
             "likes_count",
@@ -135,6 +143,9 @@ class TravelPostDetailSerializer(serializers.ModelSerializer):
     def get_favorite_count(self, obj):
         return getattr(obj, "favorite_count", obj.favorites.count())
 
+    def get_content_preview(self, obj):
+        return build_post_excerpt(obj.content)
+
     def get_liked(self, obj):
         request = self.context.get("request")
         return is_post_liked(obj, getattr(request, "user", None))
@@ -147,6 +158,12 @@ class TravelPostDetailSerializer(serializers.ModelSerializer):
 class TravelPostCreateSerializer(serializers.ModelSerializer):
     def validate_tags(self, value):
         return normalize_public_tags(value)
+
+    def validate_content(self, value):
+        sanitized = sanitize_post_content(value)
+        if not sanitized:
+            raise serializers.ValidationError("正文不能为空。")
+        return sanitized
 
     class Meta:
         model = TravelPost

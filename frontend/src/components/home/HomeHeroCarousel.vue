@@ -2,7 +2,14 @@
   <article class="card hero-carousel">
     <div class="hero-carousel-stage">
       <transition name="fade-slide" mode="out-in">
-        <div v-if="activeSlide" :key="activeSlide.key" class="hero-carousel-slide" :style="activeStyle">
+        <div
+          v-if="activeSlide"
+          :key="activeSlide.key"
+          class="hero-carousel-slide"
+          :style="activeStyle"
+          @touchstart.passive="handleTouchStart"
+          @touchend.passive="handleTouchEnd"
+        >
           <div class="hero-carousel-overlay">
             <div class="hero-carousel-copy">
               <h1 class="hero-title">{{ activeSlide.title }}</h1>
@@ -43,7 +50,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 
-
 const props = defineProps({
   slides: {
     type: Array,
@@ -56,6 +62,7 @@ const props = defineProps({
 });
 
 const activeIndex = ref(0);
+const touchStartX = ref(0);
 let timerId = null;
 
 const activeSlide = computed(() => props.slides[activeIndex.value] || null);
@@ -65,20 +72,49 @@ const activeStyle = computed(() => ({
     : "linear-gradient(135deg, #0d5c63, #1f7a8c 55%, #f28f3b)",
 }));
 
-function setSlide(index) {
+function showSlide(index, restartTimer = true) {
   activeIndex.value = index;
-  restartTimer();
+  if (restartTimer) {
+    startTimer();
+  }
+}
+
+function setSlide(index) {
+  showSlide(index);
 }
 
 function prevSlide() {
   if (!props.slides.length) return;
-  activeIndex.value = (activeIndex.value - 1 + props.slides.length) % props.slides.length;
-  restartTimer();
+  showSlide((activeIndex.value - 1 + props.slides.length) % props.slides.length);
 }
 
 function nextSlide() {
   if (!props.slides.length) return;
+  showSlide((activeIndex.value + 1) % props.slides.length);
+}
+
+function autoAdvance() {
+  if (!props.slides.length) return;
   activeIndex.value = (activeIndex.value + 1) % props.slides.length;
+}
+
+function handleTouchStart(event) {
+  touchStartX.value = event.changedTouches?.[0]?.clientX || 0;
+}
+
+function handleTouchEnd(event) {
+  const endX = event.changedTouches?.[0]?.clientX;
+  if (!endX || !touchStartX.value) return;
+
+  const delta = endX - touchStartX.value;
+  touchStartX.value = 0;
+
+  if (Math.abs(delta) < 48) return;
+  if (delta > 0) {
+    prevSlide();
+    return;
+  }
+  nextSlide();
 }
 
 function stopTimer() {
@@ -91,11 +127,7 @@ function stopTimer() {
 function startTimer() {
   stopTimer();
   if (props.slides.length <= 1) return;
-  timerId = window.setInterval(nextSlide, props.intervalMs);
-}
-
-function restartTimer() {
-  startTimer();
+  timerId = window.setInterval(autoAdvance, props.intervalMs);
 }
 
 watch(
@@ -128,6 +160,10 @@ onBeforeUnmount(stopTimer);
 .hero-carousel-stage,
 .hero-carousel-slide {
   min-height: 520px;
+}
+
+.hero-carousel-slide {
+  touch-action: pan-y;
 }
 
 .hero-carousel-overlay {
@@ -211,7 +247,40 @@ onBeforeUnmount(stopTimer);
   }
 
   .hero-carousel-footer {
-    align-items: flex-start;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hero-carousel-controls {
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-carousel,
+  .hero-carousel-stage,
+  .hero-carousel-slide,
+  .hero-carousel-overlay {
+    min-height: 380px;
+  }
+
+  .hero-carousel-overlay {
+    gap: 20px;
+    padding: 20px;
+  }
+
+  .hero-carousel-controls {
+    width: 100%;
+  }
+
+  .hero-carousel-dots {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  .hero-carousel-arrow {
+    width: 40px;
+    height: 40px;
   }
 }
 </style>

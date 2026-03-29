@@ -4,7 +4,7 @@
       <div class="header card surface-strong" :class="{ open: menuOpen }">
         <div class="header-brand-row">
           <RouterLink class="brand-link" to="/">
-            <AppLogo title="China Travel Compass" subtitle="中国城市与景点智能旅游平台" />
+            <AppLogo title="China Travel Compass" subtitle="中国城市与景点智能旅行平台" />
           </RouterLink>
 
           <button
@@ -20,38 +20,45 @@
           </button>
         </div>
 
-        <nav class="nav-links" :class="{ open: menuOpen }">
-          <RouterLink v-for="item in items" :key="item.to" class="nav-link" :to="item.to">
-            {{ item.label }}
-          </RouterLink>
-        </nav>
+        <div class="header-menu-shell" :class="{ open: menuOpen }">
+          <nav class="nav-links">
+            <RouterLink v-for="item in items" :key="item.to" class="nav-link" :to="item.to">
+              {{ item.label }}
+            </RouterLink>
+          </nav>
 
-        <div class="nav-actions" :class="{ open: menuOpen }">
-          <RouterLink v-if="authState.user?.is_staff" class="btn btn-secondary nav-action-button" to="/backoffice">后台管理</RouterLink>
-          <RouterLink v-if="authState.user" class="btn btn-secondary nav-action-button nav-profile-link" to="/profile">
-            <span class="nav-profile-avatar">
-              <img v-if="authState.user.avatar_url" :src="authState.user.avatar_url" :alt="authState.user.nickname || '用户头像'" />
-              <span v-else>{{ authState.user.nickname?.slice(0, 1) || "旅" }}</span>
-            </span>
-            <span>{{ authState.user.nickname || "个人主页" }}</span>
-          </RouterLink>
-          <RouterLink v-if="!authState.user" class="btn btn-secondary nav-action-button" to="/login">登录</RouterLink>
-          <RouterLink v-if="!authState.user" class="btn btn-primary nav-action-button" to="/register">注册</RouterLink>
-          <button v-if="authState.user" class="btn btn-primary nav-action-button" type="button" @click="handleLogout">退出</button>
+          <div class="nav-actions">
+            <RouterLink v-if="authState.user?.is_staff" class="btn btn-secondary nav-action-button" to="/backoffice">
+              后台管理
+            </RouterLink>
+            <RouterLink v-if="authState.user" class="btn btn-secondary nav-action-button nav-profile-link" to="/profile">
+              <span class="nav-profile-avatar">
+                <img v-if="authState.user.avatar_url" :src="authState.user.avatar_url" :alt="authState.user.nickname || '用户头像'" />
+                <span v-else>{{ authState.user.nickname?.slice(0, 1) || "游" }}</span>
+              </span>
+              <span>{{ authState.user.nickname || "个人主页" }}</span>
+            </RouterLink>
+            <RouterLink v-if="!authState.user" class="btn btn-secondary nav-action-button" to="/login">登录</RouterLink>
+            <RouterLink v-if="!authState.user" class="btn btn-primary nav-action-button" to="/register">注册</RouterLink>
+            <button v-if="authState.user" class="btn btn-primary nav-action-button" type="button" @click="handleLogout">退出</button>
+          </div>
         </div>
       </div>
     </div>
+
+    <button v-if="menuOpen" class="nav-backdrop" type="button" aria-label="关闭导航菜单" @click="menuOpen = false"></button>
   </header>
 </template>
 
 <script setup>
-import { ref, watch } from "vue";
+import { onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 
 import { logout } from "../services/api";
 import { authState } from "../stores/auth";
 import AppLogo from "./AppLogo.vue";
 
+const MOBILE_BREAKPOINT = 980;
 
 const route = useRoute();
 const router = useRouter();
@@ -61,18 +68,54 @@ const items = [
   { label: "城市推荐", to: "/cities" },
   { label: "景点总览", to: "/attractions" },
   { label: "AI 规划", to: "/planner" },
-  { label: "旅游社区", to: "/community" },
+  { label: "旅行社区", to: "/community" },
 ];
+
+function closeMenu() {
+  menuOpen.value = false;
+}
+
+function syncBodyScrollLock(locked) {
+  document.body.style.overflow = locked ? "hidden" : "";
+}
+
+function handleResize() {
+  if (window.innerWidth > MOBILE_BREAKPOINT && menuOpen.value) {
+    closeMenu();
+  }
+}
+
+function handleKeydown(event) {
+  if (event.key === "Escape") {
+    closeMenu();
+  }
+}
 
 watch(
   () => route.fullPath,
   () => {
-    menuOpen.value = false;
+    closeMenu();
   },
 );
 
+watch(menuOpen, (value) => {
+  syncBodyScrollLock(value && window.innerWidth <= MOBILE_BREAKPOINT);
+});
+
+onMounted(() => {
+  window.addEventListener("resize", handleResize, { passive: true });
+  window.addEventListener("keydown", handleKeydown);
+});
+
+onBeforeUnmount(() => {
+  syncBodyScrollLock(false);
+  window.removeEventListener("resize", handleResize);
+  window.removeEventListener("keydown", handleKeydown);
+});
+
 async function handleLogout() {
   await logout();
+  closeMenu();
   router.push("/");
 }
 </script>
@@ -86,6 +129,7 @@ async function handleLogout() {
 }
 
 .header {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(0, 1fr) minmax(0, auto);
   align-items: center;
@@ -97,6 +141,10 @@ async function handleLogout() {
     radial-gradient(circle at top right, rgba(242, 143, 59, 0.12), transparent 34%);
 }
 
+.header.open {
+  box-shadow: 0 28px 56px rgba(17, 57, 68, 0.16);
+}
+
 .header-brand-row {
   display: flex;
   align-items: center;
@@ -106,6 +154,10 @@ async function handleLogout() {
 
 .brand-link {
   min-width: 0;
+}
+
+.header-menu-shell {
+  display: contents;
 }
 
 .nav-links {
@@ -189,6 +241,7 @@ async function handleLogout() {
   cursor: pointer;
   background: rgba(13, 92, 99, 0.08);
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .nav-toggle span {
@@ -196,12 +249,50 @@ async function handleLogout() {
   height: 2px;
   border-radius: 999px;
   background: currentColor;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
-@media (max-width: 1180px) {
+.header.open .nav-toggle span:nth-child(1) {
+  transform: translateY(6px) rotate(45deg);
+}
+
+.header.open .nav-toggle span:nth-child(2) {
+  opacity: 0;
+}
+
+.header.open .nav-toggle span:nth-child(3) {
+  transform: translateY(-6px) rotate(-45deg);
+}
+
+.nav-backdrop {
+  display: none;
+}
+
+@media (max-width: 980px) {
+  .header-wrap {
+    padding-inline: 14px;
+  }
+
   .header {
     grid-template-columns: 1fr;
+    gap: 0;
+    padding: 12px;
+    border-radius: 24px;
+  }
+
+  .header-menu-shell {
+    display: grid;
     gap: 12px;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.28s ease, opacity 0.2s ease, padding-top 0.2s ease;
+  }
+
+  .header-menu-shell.open {
+    max-height: calc(100vh - 120px);
+    opacity: 1;
+    padding-top: 14px;
   }
 
   .nav-toggle {
@@ -210,42 +301,74 @@ async function handleLogout() {
 
   .nav-links,
   .nav-actions {
-    display: none;
+    display: grid;
+    justify-content: stretch;
+    gap: 10px;
+    padding: 0;
+    background: transparent;
   }
 
-  .nav-links.open,
-  .nav-actions.open {
-    display: flex;
-  }
-
-  .nav-links.open {
-    justify-content: flex-start;
-  }
-
-  .nav-actions.open {
-    justify-content: flex-start;
-  }
-}
-
-@media (max-width: 720px) {
-  .header-wrap {
-    padding-inline: 14px;
-  }
-
-  .header {
-    padding: 12px;
-    border-radius: 24px;
-  }
-
-  .nav-links.open,
-  .nav-actions.open {
-    flex-direction: column;
-    align-items: stretch;
+  .nav-actions {
+    padding-top: 12px;
+    border-top: 1px solid rgba(17, 57, 68, 0.08);
   }
 
   .nav-link,
   .nav-action-button {
     width: 100%;
+    min-height: 50px;
+    justify-content: flex-start;
+    padding-inline: 16px;
+  }
+
+  .nav-link.router-link-active {
+    box-shadow: none;
+  }
+
+  .nav-profile-link {
+    justify-content: flex-start;
+  }
+
+  .nav-backdrop {
+    position: fixed;
+    inset: 0;
+    display: block;
+    padding: 0;
+    border: 0;
+    background: rgba(17, 57, 68, 0.14);
+    backdrop-filter: blur(6px);
+    z-index: 23;
+  }
+}
+
+@media (max-width: 640px) {
+  .header-wrap {
+    top: 8px;
+    padding-top: 10px;
+    padding-inline: 12px;
+  }
+
+  .header {
+    border-radius: 22px;
+  }
+
+  .brand-link :deep(.app-logo-copy small) {
+    display: none;
+  }
+
+  .brand-link :deep(.app-logo-mark) {
+    width: 46px;
+    height: 46px;
+    border-radius: 16px;
+  }
+
+  .brand-link :deep(.app-logo-mark svg) {
+    width: 30px;
+    height: 30px;
+  }
+
+  .nav-actions {
+    gap: 8px;
   }
 }
 </style>

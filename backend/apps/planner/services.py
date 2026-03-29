@@ -58,6 +58,10 @@ class PlannerGenerationError(Exception):
         self.stage = stage
 
 
+PLANNER_MODE_QWEN = "qwen"
+PLANNER_MODE_AGENT = "agent"
+
+
 def explain_request_exception(exc: requests.RequestException) -> str:
     if isinstance(exc, requests.Timeout):
         return "大模型响应超时，请稍后重试。"
@@ -104,6 +108,7 @@ def build_failed_plan(
     recommended_cities: list[TravelCity] | None = None,
     matched_city_name: str = "",
     fallback_reason: str = "",
+    planner_strategy: str = PLANNER_MODE_AGENT,
 ) -> dict:
     return {
         "success": False,
@@ -120,6 +125,7 @@ def build_failed_plan(
         "packing_list": [],
         "itinerary": [],
         "planner_mode": "failed",
+        "planner_strategy": planner_strategy,
         "planner_provider": "rule",
         "planner_model": "",
         "matched_city_name": matched_city_name,
@@ -317,6 +323,55 @@ def get_llm_settings() -> dict | None:
     }
 
 
+def normalize_planner_strategy(value: str | None) -> str:
+    return PLANNER_MODE_QWEN if str(value or "").strip().lower() == PLANNER_MODE_QWEN else PLANNER_MODE_AGENT
+
+
+def extract_message_content(payload: dict) -> str:
+    choices = payload.get("choices") or []
+    if not choices:
+        raise PlannerGenerationError("大模型未返回有效内容。", stage="llm_choices")
+
+    message = choices[0].get("message") or {}
+    content = message.get("content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        fragments = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                fragments.append(str(item.get("text", "")))
+        return "\n".join(fragment for fragment in fragments if fragment)
+    return str(content or "")
+
+
+def call_llm_chat(messages: list[dict], *, temperature: float = 0.35) -> dict:
+    settings = get_llm_settings()
+    if not settings:
+        raise PlannerGenerationError("未配置可用的大模型参数。", stage="llm_config")
+
+    response = requests.post(
+        f"{settings['base_url']}/chat/completions",
+        headers={
+            "Authorization": f"Bearer {settings['api_key']}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": settings["model"],
+            "temperature": temperature,
+            "messages": messages,
+        },
+        timeout=settings["timeout"],
+    )
+    response.raise_for_status()
+    payload = response.json()
+    return {
+        "content": extract_message_content(payload),
+        "provider": settings["provider"],
+        "model": settings["model"],
+    }
+
+
 def extract_json_payload(content: str) -> dict | None:
     if not content:
         return None
@@ -415,11 +470,7 @@ def normalize_llm_itinerary(raw_data: dict, city: TravelCity, attraction_pool: l
     return itinerary
 
 
-def generate_itinerary_with_llm(city: TravelCity, interests: list[str], duration_days: int, payload: dict) -> dict | None:
-    settings = get_llm_settings()
-    if not settings:
-        raise PlannerGenerationError("未配置可用的大模型参数，已切换为规则规划。", stage="llm_config")
-
+def generate_itinerary_with_agent(city: TravelCity, interests: list[str], duration_days: int, payload: dict) -> dict | None:
     ranked_attractions = sorted(city.attractions.all(), key=lambda item: attraction_match_score(item, interests), reverse=True)
     attraction_pool = list(ranked_attractions[: max(10, duration_days * 4)])
     if not attraction_pool:
@@ -469,35 +520,24 @@ def generate_itinerary_with_llm(city: TravelCity, interests: list[str], duration
         },
     }
 
-    response = requests.post(
-        f"{settings['base_url']}/chat/completions",
-        headers={
-            "Authorization": f"Bearer {settings['api_key']}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": settings["model"],
-            "temperature": 0.35,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "你是中国旅行路线规划助手。"
-                        "你只能从给定的景点列表中选择景点，必须输出合法 JSON，"
-                        "不要输出任何额外解释。"
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": json.dumps(prompt, ensure_ascii=False),
-                },
-            ],
-        },
-        timeout=settings["timeout"],
+    llm_result = call_llm_chat(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "你是中国旅行路线规划助手。"
+                    "你只能从给定的景点列表中选择景点，必须输出合法 JSON，"
+                    "不要输出任何额外解释。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(prompt, ensure_ascii=False),
+            },
+        ],
+        temperature=0.35,
     )
-    response.raise_for_status()
-
-    content = response.json()["choices"][0]["message"]["content"]
+    content = llm_result["content"]
     parsed = extract_json_payload(content)
     if not parsed:
         raise PlannerGenerationError("大模型返回内容无法解析为有效行程数据，已切换为规则规划。", stage="llm_parse")
@@ -511,9 +551,88 @@ def generate_itinerary_with_llm(city: TravelCity, interests: list[str], duration
         "summary": clean_text(parsed.get("summary")) or f"已结合 {city.name} 的真实景点库生成更细化的行程建议。",
         "packing_list": [clean_text(item) for item in parsed.get("packing_list", []) if clean_text(item)][:6],
         "itinerary": itinerary,
-        "planner_mode": "llm",
-        "planner_provider": settings["provider"],
-        "planner_model": settings["model"],
+        "planner_mode": "database_agent",
+        "planner_strategy": PLANNER_MODE_AGENT,
+        "planner_provider": llm_result["provider"],
+        "planner_model": llm_result["model"],
+    }
+
+
+def generate_itinerary_with_direct_qwen(city: TravelCity, interests: list[str], duration_days: int, payload: dict) -> dict | None:
+    attraction_pool = list(
+        sorted(city.attractions.all(), key=lambda item: attraction_match_score(item, interests), reverse=True)[: max(12, duration_days * 4)]
+    )
+    if not attraction_pool:
+        raise PlannerGenerationError("当前城市缺少可供规划的景点数据，已切换为规则规划。", stage="attraction_pool")
+
+    prompt = {
+        "city": city.name,
+        "province": city.province,
+        "short_intro": clean_text(city.short_intro),
+        "overview": compact_text(city.overview, 180),
+        "travel_highlights": compact_text(city.travel_highlights, 180),
+        "best_season": clean_text(city.best_season),
+        "duration_days": duration_days,
+        "departure_city": payload.get("departure_city", ""),
+        "budget_level": payload.get("budget_level", "balanced"),
+        "companions": payload.get("companions", ""),
+        "season_hint": payload.get("season_hint", ""),
+        "interests": interests,
+        "response_schema": {
+            "trip_title": "string",
+            "summary": "string",
+            "packing_list": ["string"],
+            "itinerary": [
+                {
+                    "day": "number",
+                    "theme": "string",
+                    "summary": "string",
+                    "transport_tip": "string",
+                    "checklist": ["string"],
+                    "blocks": [
+                        {"period": "上午", "spot_name": "string", "summary": "string"},
+                        {"period": "下午", "spot_name": "string", "summary": "string"},
+                        {"period": "晚上", "spot_name": "string", "summary": "string"},
+                    ],
+                }
+            ],
+        },
+    }
+
+    llm_result = call_llm_chat(
+        [
+            {
+                "role": "system",
+                "content": (
+                    "你是中国旅行规划助手。"
+                    "请根据用户输入直接生成可执行的逐日行程。"
+                    "必须输出合法 JSON，不要输出任何额外说明。"
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(prompt, ensure_ascii=False),
+            },
+        ],
+        temperature=0.45,
+    )
+    parsed = extract_json_payload(llm_result["content"])
+    if not parsed:
+        raise PlannerGenerationError("千问直连模式返回格式异常，已切换为规则规划。", stage="qwen_parse")
+
+    itinerary = normalize_llm_itinerary(parsed, city, attraction_pool, duration_days)
+    if not itinerary:
+        raise PlannerGenerationError("千问直连模式未生成有效行程，已切换为规则规划。", stage="qwen_itinerary")
+
+    return {
+        "trip_title": clean_text(parsed.get("trip_title")) or f"{city.name}{duration_days}天 千问直连行程",
+        "summary": clean_text(parsed.get("summary")) or f"已通过千问直连模式生成 {city.name} 的逐日行程建议。",
+        "packing_list": [clean_text(item) for item in parsed.get("packing_list", []) if clean_text(item)][:6],
+        "itinerary": itinerary,
+        "planner_mode": "qwen_direct",
+        "planner_strategy": PLANNER_MODE_QWEN,
+        "planner_provider": llm_result["provider"],
+        "planner_model": llm_result["model"],
     }
 
 
@@ -522,6 +641,7 @@ def build_ai_plan(payload: dict) -> dict:
     budget_level = payload.get("budget_level", "balanced")
     duration_days = int(payload.get("duration_days", 3))
     season_hint = payload.get("season_hint", "")
+    planner_strategy = normalize_planner_strategy(payload.get("mode"))
     target_city_id = payload.get("city_id")
     target_city_query = clean_text(payload.get("target_city", ""))
 
@@ -536,6 +656,7 @@ def build_ai_plan(payload: dict) -> dict:
         return build_failed_plan(
             "当前没有可用于规划的城市数据，请先补充城市信息后重试。",
             stage="city_data",
+            planner_strategy=planner_strategy,
         )
 
     llm_result = None
@@ -543,7 +664,10 @@ def build_ai_plan(payload: dict) -> dict:
     failure_stage = ""
     # Treat the LLM as optional: any config/request/parse failure falls back to deterministic rule planning.
     try:
-        llm_result = generate_itinerary_with_llm(city, interests, duration_days, payload)
+        if planner_strategy == PLANNER_MODE_QWEN:
+            llm_result = generate_itinerary_with_direct_qwen(city, interests, duration_days, payload)
+        else:
+            llm_result = generate_itinerary_with_agent(city, interests, duration_days, payload)
     except requests.RequestException as exc:
         fallback_reason = explain_request_exception(exc)
         failure_stage = "llm_request"
@@ -566,6 +690,7 @@ def build_ai_plan(payload: dict) -> dict:
             recommended_cities=recommended_cities,
             matched_city_name=city.name,
             fallback_reason=fallback_reason,
+            planner_strategy=planner_strategy,
         )
 
     budget = estimate_plan_budget(city, duration_days, budget_level)
@@ -597,7 +722,8 @@ def build_ai_plan(payload: dict) -> dict:
             "常用充电设备",
         ],
         "itinerary": itinerary,
-        "planner_mode": (llm_result or {}).get("planner_mode", "rule"),
+        "planner_mode": (llm_result or {}).get("planner_mode", "rule_fallback"),
+        "planner_strategy": (llm_result or {}).get("planner_strategy", planner_strategy),
         "planner_provider": (llm_result or {}).get("planner_provider", "rule"),
         "planner_model": (llm_result or {}).get("planner_model", ""),
         "matched_city_name": city.name,

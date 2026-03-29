@@ -32,11 +32,16 @@ body {
   min-height: 100vh;
   color: var(--text);
   font-family: var(--body-font);
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top left, rgba(223, 127, 50, 0.2), transparent 22%),
     radial-gradient(circle at 85% 12%, rgba(22, 114, 124, 0.15), transparent 20%),
     radial-gradient(circle at 55% 100%, rgba(18, 57, 74, 0.08), transparent 18%),
     linear-gradient(180deg, var(--bg) 0%, #fbf7ef 42%, var(--bg-deep) 100%);
+}
+
+#app {
+  min-height: 100vh;
 }
 
 a {
@@ -49,6 +54,7 @@ input,
 select,
 textarea {
   font: inherit;
+  min-width: 0;
 }
 
 img {
@@ -227,7 +233,7 @@ img {
 }
 
 .card-detail-button {
-  min-width: 192px;
+  min-width: min(192px, 100%);
   padding-inline: 22px;
   justify-content: center;
 }
@@ -417,6 +423,10 @@ img {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.title-row > * {
+  min-width: 0;
 }
 
 .compact-row {
@@ -2066,22 +2076,42 @@ img {
   .city-detail-side-panel {
     position: static;
   }
+
+  .city-spotlight-description,
+  .city-spotlight-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
 }
 
 @media (max-width: 1120px) {
   .hero-card,
   .split-layout,
-  .grid-4,
-  .grid-3,
-  .grid-2,
-  .metric-grid,
-  .field-grid,
   .planner-layout,
+  .planner-layout-upgraded,
   .admin-grid,
   .backoffice-shell,
   .auth-layout,
   .post-detail-layout {
     grid-template-columns: 1fr;
+  }
+
+  .grid-4,
+  .grid-3,
+  .province-showcase-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid-2,
+  .field-grid,
+  .metric-grid,
+  .stat-strip,
+  .community-feed-post-metrics,
+  .profile-kpi-grid,
+  .profile-summary-strip,
+  .profile-location-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .province-showcase-grid {
@@ -2101,10 +2131,55 @@ img {
   }
 }
 
+@media (max-width: 900px) {
+  .grid-2,
+  .field-grid,
+  .metric-grid,
+  .community-feed-layout,
+  .community-feed-post-layout,
+  .planner-layout,
+  .planner-layout-upgraded,
+  .admin-grid,
+  .auth-layout,
+  .post-detail-layout,
+  .profile-editor-shell,
+  .city-detail-layout,
+  .city-spotlight-shell,
+  .donut-chart-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .community-feed {
+    order: 1;
+  }
+
+  .community-side {
+    order: 2;
+  }
+
+  .community-compose {
+    order: 3;
+  }
+
+  .post-detail-side,
+  .city-detail-side-panel,
+  .sticky-card {
+    position: static;
+  }
+
+  .community-feed-post-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 720px) {
   .app-main,
   .backoffice-main {
-    padding-inline: 14px;
+    padding: 16px 14px 64px;
+  }
+
+  .page {
+    gap: 20px;
   }
 
   .section-shell,
@@ -2122,6 +2197,14 @@ img {
   .post-detail-cover,
   .post-detail-cover-overlay {
     min-height: 240px;
+  }
+
+  .hero-title {
+    font-size: clamp(1.9rem, 9vw, 2.8rem);
+  }
+
+  .section-title {
+    font-size: clamp(1.25rem, 6vw, 1.7rem);
   }
 
   .title-row,
@@ -2145,15 +2228,34 @@ img {
     grid-template-columns: 1fr;
   }
 
+  .grid-4,
+  .grid-3,
   .stat-strip,
   .donut-chart-layout,
   .province-showcase-grid,
+  .grid-2,
+  .field-grid,
+  .metric-grid,
   .profile-kpi-grid,
   .community-feed-layout,
   .community-feed-post-metrics,
   .profile-summary-strip,
   .profile-location-row {
     grid-template-columns: 1fr;
+  }
+
+  .city-side-cover {
+    min-height: 180px;
+  }
+
+  .city-spotlight-shell,
+  .city-spotlight-hero,
+  .city-spotlight-overlay {
+    min-height: 360px;
+  }
+
+  .city-spotlight-item {
+    padding: 16px;
   }
 
   .profile-save-panel {
@@ -2166,6 +2268,42 @@ img {
 
   .card-detail-button {
     width: 100%;
+    min-width: 0;
   }
 
+  .file-upload-preview img {
+    height: 180px;
+  }
+
+  .post-detail-cover-shell,
+  .post-detail-cover-overlay {
+    min-height: 260px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 540px) {
+  .app-main,
+  .backoffice-main {
+    padding-inline: 12px;
+  }
+
+  .section-shell,
+  .hero-card,
+  .detail-overlay,
+  .community-hero-overlay,
+  .post-detail-cover-overlay {
+    padding: 18px;
+  }
+
+  .action-row .btn,
+  .page-toolbar .btn,
+  .hero-actions .btn {
+    width: 100%;
+  }
 }

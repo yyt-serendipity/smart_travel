@@ -93,31 +93,24 @@ TEMPLATES = [
 WSGI_APPLICATION = "smart_travel.wsgi.application"
 ASGI_APPLICATION = "smart_travel.asgi.application"
 
-# Keep a sqlite fallback for demos, but default to MySQL for the real project data.
-DB_ENGINE = os.getenv("DB_ENGINE", "mysql").lower()
-
-if DB_ENGINE == "sqlite":
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.mysql",
+        "NAME": os.getenv("DB_NAME", "smart_travel"),
+        "USER": os.getenv("DB_USER", "root"),
+        "PASSWORD": os.getenv("DB_PASSWORD", "123456"),
+        "HOST": os.getenv("DB_HOST", "127.0.0.1"),
+        "PORT": int(os.getenv("DB_PORT", "3306")),
+        "OPTIONS": {
+            "charset": "utf8mb4",
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+        },
+        "TEST": {
+            "NAME": os.getenv("DB_TEST_NAME", "test_smart_travel"),
+            "CHARSET": "utf8mb4",
+        },
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.mysql",
-            "NAME": os.getenv("DB_NAME", "smart_travel"),
-            "USER": os.getenv("DB_USER", "root"),
-            "PASSWORD": os.getenv("DB_PASSWORD", "123456"),
-            "HOST": os.getenv("DB_HOST", "127.0.0.1"),
-            "PORT": int(os.getenv("DB_PORT", "3306")),
-            "OPTIONS": {
-                "charset": "utf8mb4",
-                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-            },
-        }
-    }
+}
 
 AUTH_PASSWORD_VALIDATORS = []
 

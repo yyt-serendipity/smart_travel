@@ -22,6 +22,7 @@
         </transition>
       </div>
     </main>
+    <AssistantChatWidget v-if="showAssistantWidget" />
     <ScrollTopButton />
   </div>
 </template>
@@ -31,6 +32,7 @@ import { computed, ref, watch } from "vue";
 import { RouterView, useRoute } from "vue-router";
 
 import AppHeader from "./components/AppHeader.vue";
+import AssistantChatWidget from "./components/AssistantChatWidget.vue";
 import ScrollTopButton from "./components/ScrollTopButton.vue";
 import BackofficeHeader from "./components/backoffice/BackofficeHeader.vue";
 import BackofficeSidebar from "./components/backoffice/BackofficeSidebar.vue";
@@ -63,6 +65,7 @@ watch(
 );
 
 const isBackoffice = computed(() => route.meta.layout === "admin");
+const showAssistantWidget = computed(() => !isBackoffice.value && !["login", "register"].includes(route.name));
 const transitionName = computed(() => {
   if (route.meta.transition === "auth-swap") {
     return authTransitionDirection.value === "forward" ? "auth-swap-forward" : "auth-swap-back";

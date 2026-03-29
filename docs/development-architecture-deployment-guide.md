@@ -1,809 +1,747 @@
-﻿# Smart Travel 椤圭洰寮€鍙戙€佹灦鏋勪笌閮ㄧ讲璇存槑
+# Smart Travel 架构与部署说明
 
-## 1. 椤圭洰瀹氫綅
+## 1. 文档目标
 
-`smart_travel` 鏄竴涓洿缁曚腑鍥藉煄甯傛梾娓稿満鏅瀯寤虹殑鍓嶅悗绔垎绂婚」鐩紝鐩爣涓嶆槸鍋氶€氱敤 OTA锛岃€屾槸鎶婁竴鏉″畬鏁寸殑鈥滄暟鎹噰闆?-> 鏁版嵁鍏ュ簱 -> 鍐呭灞曠ず -> AI 瑙勫垝 -> 绀惧尯浜掑姩 -> 鍚庡彴绠＄悊 -> 绾夸笂閮ㄧ讲鈥濋摼璺仛瀹屾暣銆?
-褰撳墠椤圭洰瑕嗙洊鐨勬牳蹇冭兘鍔涳細
+这份文档关注两件事：
 
-- 鍩庡競鍒楄〃銆佸煄甯傝鎯呫€佹櫙鐐硅鎯?- AI 琛岀▼瑙勫垝涓庤绋嬩繚瀛?- 鏃呰绀惧尯鍙戝笘銆佺偣璧炪€佹敹钘忋€佽瘎璁?- 鍚庡彴鏁版嵁绠＄悊銆佹棩蹇楀璁°€丒xcel 瀵煎叆
-- 楂樺痉澶╂皵 / 闈欐€佸湴鍥?- 闃块噷浜?OSS 涓婁紶
-- Qwen / DashScope 澶фā鍨嬭鍒?
-## 2. 鎶€鏈爤
+1. 当前系统架构是怎样组成的
+2. 当前项目应该如何部署、运维和排障
 
-| 灞?| 鎶€鏈?|
-| --- | --- |
-| 鍓嶇 | Vue 3銆乂ue Router銆丄xios銆乂ite |
-| 鍚庣 | Django 5.1銆丏jango REST Framework銆乀oken Auth |
-| 鏁版嵁搴?| MySQL 涓轰富锛孲QLite 浣滀负鍥為€€ |
-| 鏁版嵁瀵煎叆 | openpyxl銆丒xcel 鎵归噺瀵煎叆 |
-| 绗笁鏂规湇鍔?| DashScope(Qwen)銆侀珮寰峰紑鏀惧钩鍙般€侀樋閲屼簯 OSS |
-| 閮ㄧ讲 | Ubuntu 24.04銆丟unicorn銆丯ginx銆乻ystemd |
+本文档按当前仓库代码状态重写，已经明确同步以下事实：
 
-## 3. 寮€鍙戞祦绋嬫€昏
+1. 当前部署方案是原生部署，不是 Docker
+2. 当前业务主模型是 `TravelCity`、`Attraction`、`TravelPlan`
+3. 旧版 `Destination` 和 `TripPlan` 已删除
 
-```mermaid
-flowchart TD
-    A[闇€姹傛媶瑙 --> B[纭畾鏁版嵁鏉ユ簮: 鏈湴 Excel + 鐖櫕 Excel]
-    B --> C[璁捐鏍稿績鏁版嵁妯″瀷]
-    C --> D[鎸変笟鍔℃媶鍒?Django apps]
-    D --> E[瀹炵幇 REST API]
-    E --> F[瀹炵幇 Vue 椤甸潰涓庤矾鐢盷
-    F --> G[鎺ュ叆 AI / 鍦板浘 / 涓婁紶绛夌涓夋柟鏈嶅姟]
-    G --> H[鑱旇皟涓庢瀯寤洪獙璇乚
-    H --> I[鐢熶骇閰嶇疆鏀舵暃]
-    I --> J[閮ㄧ讲鍒?Ubuntu + Nginx + Gunicorn + MySQL]
-```
+---
 
-鍙互鎶婅繖涓」鐩悊瑙ｄ负 6 涓繛缁樁娈碉細
+## 2. 系统架构总览
 
-1. 鏁版嵁鍑嗗锛氱‘瀹?Excel 妯℃澘銆佸鍏ラ€昏緫鍜岀埇铏緭鍑烘牸寮忋€?2. 鏁版嵁寤烘ā锛氬厛鎶婂煄甯傘€佹櫙鐐广€佺敤鎴枫€佺ぞ鍖恒€佽绋嬬瓑鏍稿績瀹炰綋寤鸿捣鏉ャ€?3. 鍚庣 API锛氭寜鐢ㄦ埛銆佺洰鐨勫湴銆佽鍒掋€佺ぞ鍖恒€佸悗鍙版媶妯″潡銆?4. 鍓嶇椤甸潰锛氬熀浜庣粺涓€ API 鎷艰鐢ㄦ埛绔笌鍚庡彴绔晫闈€?5. 绗笁鏂归泦鎴愶細鎺?OSS銆丄Map銆丏ashScope銆?6. 涓婄嚎杩愮淮锛氭妸寮€鍙戦厤缃敹鎴愮敓浜ч厤缃紝骞跺畬鎴愰儴缃层€?
-## 4. 绯荤粺鏋舵瀯
+## 2.1 业务目标
+
+`Smart Travel` 不是单页展示站，而是一套完整业务链路：
+
+1. 内容采集与导入
+2. 城市和景点展示
+3. AI 行程生成
+4. 用户账户与资料
+5. 旅行社区互动
+6. 后台管理和审计
+
+## 2.2 技术架构图
 
 ```mermaid
-flowchart LR
-    Browser[娴忚鍣?/ Vue SPA] --> Nginx[Nginx]
-    Nginx -->|闈欐€佹枃浠秥 Dist[frontend/dist]
-    Nginx -->|/api /site-admin| Gunicorn[Gunicorn]
-    Gunicorn --> Django[Django + DRF]
-    Django --> MySQL[(MySQL)]
-    Django --> OSS[闃块噷浜?OSS]
-    Django --> AMap[楂樺痉澶╂皵 / 闈欐€佸湴鍥綸
-    Django --> LLM[DashScope / Qwen]
+flowchart TB
+    subgraph Client["客户端"]
+        A1[浏览器]
+    end
+
+    subgraph Frontend["前端层"]
+        B1[Vue 3 SPA]
+        B2[Vue Router]
+        B3[Axios API Client]
+    end
+
+    subgraph Gateway["接入层"]
+        C1[Nginx]
+    end
+
+    subgraph Backend["应用层"]
+        D1[Django]
+        D2[DRF API]
+        D3[Users]
+        D4[Destinations]
+        D5[Planner]
+        D6[Community]
+        D7[Backoffice]
+        D8[Core Utilities]
+    end
+
+    subgraph Data["数据层"]
+        E1[(MySQL)]
+        E2[OSS]
+        E3[AMap API]
+        E4[DashScope / LLM]
+    end
+
+    A1 --> B1
+    B1 --> B2
+    B1 --> B3
+    B3 --> C1
+    C1 --> D1
+    D1 --> D2
+    D2 --> D3
+    D2 --> D4
+    D2 --> D5
+    D2 --> D6
+    D2 --> D7
+    D3 --> D8
+    D4 --> D8
+    D5 --> D8
+    D6 --> D8
+    D7 --> D8
+    D3 --> E1
+    D4 --> E1
+    D5 --> E1
+    D6 --> E1
+    D7 --> E1
+    D8 --> E2
+    D4 --> E3
+    D5 --> E4
 ```
 
-璁捐閲嶇偣锛?
-- 鍓嶇 `axios` 缁熶竴鎶?API 璇锋眰鍙戝埌鍚屽煙 `/api`
-- 鐢熶骇鐜鐢?Nginx 鎵樼 Vue 鏋勫缓浜х墿
-- Nginx 鍐嶆妸 `/api` 鍜?`/site-admin` 鍙嶄唬鍒?Gunicorn
-- Django 鍙礋璐ｄ笟鍔?API 鍜屽悗鍙帮紝涓嶇洿鎺ユ毚闇插紑鍙戞湇鍔″櫒
+---
 
-杩欎篃鏄负浠€涔堝墠绔病鏈夊啓姝诲悗绔煙鍚嶏紝鑰屾槸鐢ㄧ浉瀵硅矾寰勶細
+## 3. 逻辑架构分层
 
+## 3.1 表现层
+
+表现层由 Vue 前端组成，负责：
+
+1. 页面展示
+2. 路由切换
+3. 本地 token 状态维护
+4. API 请求发起
+
+关键文件：
+
+- `frontend/src/main.js`
+- `frontend/src/App.vue`
+- `frontend/src/router/index.js`
 - `frontend/src/services/api.js`
-- `frontend/vite.config.js`
 
-## 5. 浠撳簱缁撴瀯
+## 3.2 接入层
 
-```text
-smart_travel/
-鈹溾攢 backend/
-鈹? 鈹溾攢 apps/
-鈹? 鈹? 鈹溾攢 backoffice/
-鈹? 鈹? 鈹溾攢 community/
-鈹? 鈹? 鈹溾攢 core/
-鈹? 鈹? 鈹溾攢 destinations/
-鈹? 鈹? 鈹溾攢 planner/
-鈹? 鈹? 鈹斺攢 users/
-鈹? 鈹溾攢 smart_travel/
-鈹? 鈹溾攢 manage.py
-鈹? 鈹斺攢 requirements.txt
-鈹溾攢 frontend/
-鈹? 鈹溾攢 public/
-鈹? 鈹溾攢 src/
-鈹? 鈹? 鈹溾攢 components/
-鈹? 鈹? 鈹溾攢 router/
-鈹? 鈹? 鈹溾攢 services/
-鈹? 鈹? 鈹溾攢 stores/
-鈹? 鈹? 鈹斺攢 views/
-鈹溾攢 docs/
-鈹斺攢 scripts/
-```
+接入层在开发和生产环境下分别由不同组件承担：
 
-## 6. 鍚庣妯″潡鎷嗗垎鎬濊矾
+### 开发环境
 
-### 6.1 涓轰粈涔堟ā鍨嬭繕鎸傚湪 `core` app label 涓?
-杩欐槸椤圭洰涓€涓緢鍏抽敭鐨勫伐绋嬪喅绛栥€?
-妯″瀷浠ｇ爜鐜板湪鍒嗗埆鍐欏湪锛?
-- `apps/destinations/models.py`
-- `apps/users/models.py`
-- `apps/planner/models.py`
-- `apps/community/models.py`
-- `apps/backoffice/models.py`
+- `Vite` 负责前端开发服务
+- `vite.config.js` 把 `/api` 代理到 Django
 
-浣嗚繖浜涙ā鍨嬮兘淇濈暀浜嗭細
+### 生产环境
+
+- `Nginx` 负责：
+  - 返回前端静态资源
+  - 把 `/api/` 反代给 Gunicorn
+  - 把 `/site-admin/` 反代给 Gunicorn
+
+## 3.3 应用层
+
+应用层由 Django + DRF 组成，核心模块如下：
+
+| 模块 | 职责 |
+| --- | --- |
+| `users` | 认证、资料、上传 |
+| `destinations` | 城市、景点、首页、天气、静态地图、Excel 导入 |
+| `planner` | AI 行程生成与保存 |
+| `community` | 社区互动 |
+| `backoffice` | 后台管理 |
+| `core` | 权限、日志、标签、上传能力 |
+
+## 3.4 数据层
+
+数据层由四部分组成：
+
+1. `MySQL`：核心业务数据
+2. `OSS`：图片与上传文件
+3. `高德 API`：天气和静态地图
+4. `DashScope / LLM`：AI 行程生成
+
+---
+
+## 4. 核心架构设计说明
+
+## 4.1 为什么前后端分离
+
+选择前后端分离的原因：
+
+1. 前端页面交互复杂，适合 SPA
+2. 后端更专注 API 与数据逻辑
+3. 便于未来替换前端样式或单独扩展移动端
+
+## 4.2 为什么按业务 app 拆分
+
+没有把所有逻辑放在一个 `core` app 里，而是拆分成多个领域模块，原因是：
+
+1. 业务边界更清晰
+2. API 职责更明确
+3. 代码规模增大后更容易维护
+
+## 4.3 为什么模型仍沿用 `core_*` 表名
+
+虽然模型代码已经分散到多个 app，但它们仍设置：
 
 ```python
-CORE_APP_LABEL = "core"
+app_label = "core"
 ```
 
-骞跺湪 `Meta.app_label = CORE_APP_LABEL`銆?
-杩欐牱鍋氱殑鐩殑锛?
-1. 淇濈暀鍘嗗彶 MySQL 琛ㄥ悕锛屼緥濡?`core_travelcity`銆乣core_travelpost`
-2. 閬垮厤鍥犱负鈥滄媶 app鈥濊€岄噸寤烘暟鎹簱
-3. 浠ｇ爜鍒嗗眰鏇存竻鏅帮紝浣嗘暟鎹簱杩佺Щ椋庨櫓鏇翠綆
+这样做的目的：
 
-瀵瑰簲鐨勫吋瀹瑰嚭鍙ｅ湪锛?
-- `backend/apps/core/models.py`
+1. 保持历史表名稳定
+2. 避免大规模重建迁移
+3. 降低数据库结构重构风险
 
-瀹冨彧鏄妸鍚勪笟鍔℃ā鍨嬮噸鏂板鍑猴紝鏂逛究鍘嗗彶瀵煎叆璺緞缁х画鍙敤銆?
-### 6.2 鍚?app 鑱岃矗
+## 4.4 为什么 AI 行程必须有规则兜底
 
-| app | 浣滅敤 |
-| --- | --- |
-| `core` | 鍏煎妯″瀷瀵煎嚭銆佸璁℃棩蹇椼€佹爣绛惧伐鍏枫€佷笂浼犲伐鍏枫€佹潈闄愬伐鍏枫€佺鐞嗗懡浠?|
-| `users` | 娉ㄥ唽銆佺櫥褰曘€佺櫥鍑恒€佷釜浜鸿祫鏂欍€佺敤鎴蜂富椤点€佷笂浼犳帴鍙?|
-| `destinations` | 棣栭〉姒傝銆佸煄甯傘€佹櫙鐐广€丒xcel 瀵煎叆銆佸湴鍥惧ぉ姘斻€佸煄甯傝祫鏂欐帹瀵?|
-| `planner` | AI 琛岀▼鐢熸垚銆佽鍒欓檷绾с€佷繚瀛樿绋?|
-| `community` | 甯栧瓙銆佺偣璧炪€佹敹钘忋€佽瘎璁?|
-| `backoffice` | 鍚庡彴缁熻銆佺敤鎴?鍩庡競/鏅偣/甯栧瓙绠＄悊銆佹搷浣滄棩蹇椼€佸悗鍙板鍏?|
+这是架构上非常重要的决策。
 
-## 7. 鍏抽敭鍚庣瀹炵幇
+如果只依赖大模型，系统会在以下情况直接不可用：
 
-### 7.1 閰嶇疆鍏ュ彛
+1. API key 缺失
+2. 网络超时
+3. 大模型响应格式错误
+4. 第三方服务限流
 
-鏍稿績鏂囦欢锛?
-- `backend/smart_travel/settings.py`
-- `backend/smart_travel/urls.py`
+当前做法是：
 
-閲嶈鐐癸細
+1. 优先用 LLM
+2. 失败后自动回退规则规划
+3. 始终返回前端能识别的统一结构
 
-1. 椤圭洰鍚姩鏃朵細鍏堣鍙?`backend/.env`
-2. 閫氳繃 `DB_ENGINE` 鍦?MySQL / SQLite 涔嬮棿鍒囨崲
-3. 閫氳繃 `DEBUG`銆乣ALLOWED_HOSTS`銆乣CORS_ALLOWED_ORIGINS` 鏀舵暃鐢熶骇閰嶇疆
-4. `/site-admin/` 鎸?Django Admin
-5. `/api/` 鎸傚悇涓氬姟妯″潡
+这使得系统的可用性明显高于“纯调用大模型”方案。
 
-### 7.2 鐢ㄦ埛涓庤璇?
-鏍稿績鏂囦欢锛?
-- `backend/apps/users/views.py`
-- `backend/apps/users/services.py`
-- `backend/apps/users/models.py`
+---
 
-杩欓儴鍒嗗疄鐜颁簡锛?
-- `Token` 鐧诲綍鎬?- 娉ㄥ唽鍚庤嚜鍔ㄥ垱寤?`UserProfile`
-- 涓汉涓婚〉鐨?`home_city` 鍜?`home_city_ref`
-- 涓婁紶鎺ュ彛 `/api/uploads/`
+## 5. 数据架构
 
-璁捐浜偣锛?
-1. `ensure_user_profile()` 淇濊瘉鐢ㄦ埛璧勬枡鏄儼鎬цˉ榻愮殑锛岃€屼笉鏄緷璧栦竴娆℃€у垵濮嬪寲銆?2. `serialize_user()` 浼氭妸涓婚〉灞曠ず鎵€闇€鐨勫瓧娈典竴娆℃€ф墦骞崇粰鍓嶇銆?
-### 7.3 鍩庡競 / 鏅偣 / 棣栭〉
+## 5.1 核心实体关系图
 
-鏍稿績鏂囦欢锛?
-- `backend/apps/destinations/views.py`
-- `backend/apps/destinations/models.py`
-- `backend/apps/destinations/home_recommendations.py`
-- `backend/apps/destinations/services.py`
-
-杩欓儴鍒嗚礋璐ｏ細
-
-- 棣栭〉鎬昏 `/api/overview/`
-- 鍩庡競鍒楄〃銆佸煄甯傝鎯呫€佹帹鑽愬煄甯?- 鏅偣鍒楄〃銆佹櫙鐐硅鎯?- 楂樺痉澶╂皵 `/api/cities/{id}/weather/`
-- 楂樺痉闈欐€佸湴鍥?`/api/cities/{id}/static-map/`
-
-棣栭〉鎺ㄨ崘閫昏緫涓嶆槸绠€鍗曟寜璇勫垎鎺掑簭锛岃€屾槸缁撳悎锛?
-- 鍩庡競/鏅偣璇勫垎
-- 鏅偣鏁伴噺
-- 鐢ㄦ埛涓婚〉涓殑甯镐綇鍩庡競
-- 鐢ㄦ埛鍋忓ソ鐨勬梾琛岄鏍?
-### 7.4 Excel 瀵煎叆
-
-鏍稿績鏂囦欢锛?
-- `backend/apps/destinations/importers.py`
-- `backend/apps/core/management/commands/import_city_excels.py`
-
-瀵煎叆閫昏緫锛?
-```mermaid
-sequenceDiagram
-    participant Excel as Excel 宸ヤ綔绨?    participant Importer as importers.py
-    participant City as TravelCity
-    participant Spot as Attraction
-
-    Excel->>Importer: 璇诲彇琛ㄥご鍜屾暟鎹
-    Importer->>Importer: 鏍￠獙琛ㄥご
-    Importer->>Importer: 鎺ㄥ鐪佷唤銆佹爣绛俱€佸皝闈€佺畝浠嬬瓑鍩庡競瀛楁
-    Importer->>City: update_or_create(name=鍩庡競鍚?
-    loop 姣忎竴琛屾櫙鐐?        Importer->>Spot: update_or_create(city, name)
-    end
-    Importer->>City: compute_city_profile(city)
-```
-
-杩欓噷鏈€閲嶈鐨勮璁℃槸锛?
-1. 鍩庡競鍚嶉粯璁ゆ潵鑷枃浠跺悕锛岃€屼笉鏄?Excel 涓崟鐙瓧娈?2. `TravelCity` 鐢?`update_or_create(name=city_name)` 鏇存柊
-3. `Attraction` 鐢?`(city, name)` 浣滀负鑷劧涓婚敭鏇存柊
-4. `overwrite=True` 鏃讹紝褰撳墠宸ヤ綔绨垮氨鏄鍩庡競鏅偣鐨勭湡鐩告簮
-
-### 7.5 AI 琛岀▼瑙勫垝
-
-鏍稿績鏂囦欢锛?
-- `backend/apps/planner/views.py`
-- `backend/apps/planner/services.py`
-- `backend/apps/planner/models.py`
-
-瑙勫垝娴佺▼锛?
-```mermaid
-sequenceDiagram
-    participant FE as Planner 椤甸潰
-    participant API as PlannerGenerateAPIView
-    participant Service as build_ai_plan
-    participant LLM as DashScope / Qwen
-    participant DB as MySQL
-
-    FE->>API: POST /api/planner/generate/
-    API->>Service: build_ai_plan(payload)
-    Service->>DB: 鏌ヨ鐩爣鍩庡競/鎺ㄨ崘鍩庡競/鏅偣姹?    alt 閰嶇疆浜?LLM 涓旇皟鐢ㄦ垚鍔?        Service->>LLM: 鍙戦€佺粨鏋勫寲 prompt
-        LLM-->>Service: 杩斿洖 JSON itinerary
-        Service->>Service: 褰掍竴鍖栦负鍓嶇鍥哄畾缁撴瀯
-    else LLM 涓嶅彲鐢?/ 瑙ｆ瀽澶辫触 / 缃戠粶澶辫触
-        Service->>Service: 璧拌鍒欒鍒?    end
-    Service-->>API: 杩斿洖 itinerary + budget + city
-    API-->>FE: JSON 鍝嶅簲
-```
-
-杩欓噷鐨勫叧閿笉鏄€滄湁澶фā鍨嬧€濓紝鑰屾槸鈥滄病鏈夊ぇ妯″瀷涔熻兘杩斿洖缁撴灉鈥濄€?
-`build_ai_plan()` 鐨勭瓥鐣ユ槸锛?
-1. 鍏堟壘鐩爣鍩庡競
-2. 鎵句笉鍒板氨鎺ㄨ崘涓€涓渶鍚堥€傜殑鍩庡競
-3. 灏濊瘯璋冪敤 LLM
-4. 浠讳竴澶辫触閮介檷绾у埌瑙勫垯瑙勫垝
-5. 濡傛灉鐢ㄦ埛瑕佹眰淇濆瓨锛屽啀钀戒竴浠?`TravelPlan`
-
-杩欒 AI 鍔熻兘浠庘€滃彲閫夊寮衡€濆彉鎴愨€滀笉浼氶樆鏂富娴佺▼鈥濄€?
-### 7.6 绀惧尯妯″潡
-
-鏍稿績鏂囦欢锛?
-- `backend/apps/community/views.py`
-- `backend/apps/community/models.py`
-- `backend/apps/community/services.py`
-
-瀹炵幇鑳藉姏锛?
-- 鍙戝笘
-- 甯栧瓙璇︽儏娴忚璁℃暟
-- 鐐硅禐鍒囨崲
-- 鏀惰棌鍒囨崲
-- 璇勮涓庡洖澶?
-鏁版嵁搴撲笂鐢ㄤ袱鏉″敮涓€绾︽潫淇濊瘉閲嶅鎿嶄綔涓嶄細浜х敓鑴忔暟鎹細
-
-- `uniq_post_like`
-- `uniq_post_favorite`
-
-### 7.7 鍚庡彴妯″潡
-
-鏍稿績鏂囦欢锛?
-- `backend/apps/backoffice/views.py`
-- `backend/apps/backoffice/urls.py`
-- `backend/apps/backoffice/models.py`
-
-鍚庡彴涓昏鎵挎媴锛?
-- 缁熻姹囨€?- 鐢ㄦ埛绠＄悊
-- 鍩庡競 / 鏅偣 CRUD
-- 甯栧瓙绠＄悊
-- Excel 瀵煎叆
-- 鎿嶄綔鏃ュ織鏌ヨ
-
-杩欓噷鐨勪竴涓璁￠噸鐐规槸锛氬悗鍙颁笉鏄洿鎺ュ鐢ㄧ敤鎴风椤甸潰锛岃€屾槸鐙珛 `layout=admin` 鐨勫墠绔３灞傘€?
-### 7.8 鎿嶄綔鏃ュ織
-
-鏍稿績鏂囦欢锛?
-- `backend/apps/core/activity.py`
-- `backend/apps/backoffice/models.py`
-
-`log_operation()` 鏄緢澶氳姹傜殑閫氱敤瀹¤鍏ュ彛锛岃褰曪細
-
-- 鐢ㄦ埛
-- 鍒嗙被
-- 鎿嶄綔鍚?- 璇锋眰璺緞
-- IP
-- 鎿嶄綔瀵硅薄
-- 缁嗚妭 JSON
-
-瀹冩棦鏀寔 Django 妯″瀷瀹炰緥锛屼篃鏀寔涓婁紶鏂囦欢杩欑涓存椂 dict 瀵硅薄銆?
-### 7.9 涓婁紶涓庡獟浣?
-鏍稿績鏂囦欢锛?
-- `backend/apps/core/media_utils.py`
-
-褰撳墠涓婁紶閾捐矾锛?
-1. 鏍￠獙鎵╁睍鍚?2. 璇诲彇浜岃繘鍒跺唴瀹?3. 涓婁紶鍒伴樋閲屼簯 OSS
-4. 杩斿洖绛惧悕 URL
-
-杩欐剰鍛崇潃涓婁紶鍔熻兘渚濊禆浠ヤ笅閰嶇疆锛?
-- `OSS_ACCESS_KEY_ID`
-- `OSS_ACCESS_KEY_SECRET`
-- `OSS_BUCKET_NAME`
-- `OSS_ENDPOINT`
-
-### 7.10 鍦板浘涓庡ぉ姘旂紦瀛?
-鏍稿績鏂囦欢锛?
-- `backend/apps/destinations/amap.py`
-- `backend/apps/destinations/models.py`
-
-`TravelCityGeoCache` 鐢ㄦ潵缂撳瓨楂樺痉瑙ｆ瀽鍑虹殑锛?
-- 缁忕含搴?- `adcode`
-- `citycode`
-- 瑙勮寖鍦板潃
-
-浣滅敤鏄伩鍏嶆瘡娆℃煡澶╂皵閮介噸鏂板仛涓€娆″湴鐞嗙紪鐮併€?
-## 8. 鍓嶇缁撴瀯
-
-### 8.1 鍓嶇澹冲眰
-
-鏍稿績鏂囦欢锛?
-- `frontend/src/App.vue`
-
-璁捐瑕佺偣锛?
-1. 鏅€氱敤鎴风鍜屽悗鍙扮鍏辩敤涓€涓?Vue 搴旂敤
-2. 閫氳繃璺敱 `meta.layout === "admin"` 鍐冲畾鍒囨崲鎴愬悗鍙板澹?3. 鐧诲綍 / 娉ㄥ唽椤甸潰浣跨敤鍗曠嫭鐨勫垏鎹㈠姩鐢?
-### 8.2 璺敱
-
-鏍稿績鏂囦欢锛?
-- `frontend/src/router/index.js`
-
-閲嶈璺敱锛?
-- `/`
-- `/cities`
-- `/cities/:id`
-- `/attractions`
-- `/attractions/:id`
-- `/planner`
-- `/community`
-- `/community/:id`
-- `/login`
-- `/register`
-- `/profile`
-- `/backoffice`
-
-璺敱瀹堝崼璐熻矗锛?
-1. 鏈櫥褰曠姝㈣繘鍏?`/profile`銆乣/backoffice`
-2. 宸茬櫥褰曠敤鎴蜂笉鍐嶈繘鍏?`/login`銆乣/register`
-3. 闈炵鐞嗗憳绂佹杩涘叆鍚庡彴
-
-### 8.3 API 灞?
-鏍稿績鏂囦欢锛?
-- `frontend/src/services/api.js`
-- `frontend/src/stores/auth.js`
-
-鍏抽敭鐐癸細
-
-1. `baseURL` 鍥哄畾涓?`/api`
-2. 璇锋眰鎷︽埅鍣ㄨ嚜鍔ㄥ甫 `Token xxx`
-3. 閬囧埌 `401` 鑷姩娓呯悊鏈湴鐧诲綍鎬?4. 鏈湴鐧诲綍鎬佷繚瀛樺湪 `localStorage`
-
-## 9. 鏁版嵁搴撹璁?
-### 9.1 涓昏瀹炰綋
-
-| 瀹炰綋 | 璇存槑 |
-| --- | --- |
-| `auth_user` | Django 鍐呯疆鐢ㄦ埛琛?|
-| `UserProfile` | 鐢ㄦ埛琛ュ厖璧勬枡 |
-| `TravelCity` | 鍩庡競 / 鍖哄煙 / 鏅尯 |
-| `TravelCityGeoCache` | 楂樺痉鍦扮悊缂撳瓨 |
-| `Attraction` | 鏅偣 |
-| `TravelPlan` | AI 鐢熸垚骞朵繚瀛樼殑鐢ㄦ埛琛岀▼ |
-| `TravelPost` | 绀惧尯甯栧瓙 |
-| `PostLike` | 甯栧瓙鐐硅禐 |
-| `PostFavorite` | 甯栧瓙鏀惰棌 |
-| `PostComment` | 甯栧瓙璇勮涓庡洖澶?|
-| `OperationLog` | 瀹¤鏃ュ織 |
-
-### 9.2 ER 鍥?
 ```mermaid
 erDiagram
-    AUTH_USER ||--o| USER_PROFILE : has
-    AUTH_USER ||--o{ TRAVEL_PLAN : creates
-    AUTH_USER ||--o{ TRAVEL_POST : writes
-    AUTH_USER ||--o{ POST_LIKE : clicks
-    AUTH_USER ||--o{ POST_FAVORITE : collects
+    AUTH_USER ||--|| USER_PROFILE : has
+    AUTH_USER ||--o{ TRAVEL_PLAN : owns
+    AUTH_USER ||--o{ TRAVEL_POST : publishes
     AUTH_USER ||--o{ POST_COMMENT : writes
+    AUTH_USER ||--o{ POST_LIKE : performs
+    AUTH_USER ||--o{ POST_FAVORITE : performs
     AUTH_USER ||--o{ OPERATION_LOG : triggers
 
     TRAVEL_CITY ||--o{ ATTRACTION : contains
     TRAVEL_CITY ||--|| TRAVEL_CITY_GEO_CACHE : caches
-    TRAVEL_CITY ||--o{ USER_PROFILE : hometown_ref
-    TRAVEL_CITY ||--o{ TRAVEL_PLAN : target
-    TRAVEL_CITY ||--o{ TRAVEL_POST : topic_city
+    TRAVEL_CITY ||--o{ TRAVEL_PLAN : referenced_by
+    TRAVEL_CITY ||--o{ TRAVEL_POST : referenced_by
+    TRAVEL_CITY ||--o{ USER_PROFILE : home_city_ref
 
-    ATTRACTION ||--o{ TRAVEL_POST : topic_attraction
-
-    TRAVEL_POST ||--o{ POST_LIKE : receives
-    TRAVEL_POST ||--o{ POST_FAVORITE : receives
-    TRAVEL_POST ||--o{ POST_COMMENT : receives
-
-    POST_COMMENT ||--o{ POST_COMMENT : replies_to
+    ATTRACTION ||--o{ TRAVEL_POST : referenced_by
+    TRAVEL_POST ||--o{ POST_COMMENT : contains
+    TRAVEL_POST ||--o{ POST_LIKE : contains
+    TRAVEL_POST ||--o{ POST_FAVORITE : contains
+    POST_COMMENT ||--o{ POST_COMMENT : nested_reply
 ```
 
-### 9.3 涓诲叧绯昏鏄?
-1. 涓€涓敤鎴峰搴斾竴涓?`UserProfile`
-2. 涓€涓煄甯傚搴斿涓櫙鐐?3. 涓€涓煄甯傛渶澶氬搴斾竴鏉″湴鐞嗙紦瀛?4. 涓€涓敤鎴峰彲浠ヤ繚瀛樺涓?`TravelPlan`
-5. 涓€涓笘瀛愬彲浠ュ叧鑱斿煄甯傦紝涔熷彲浠ヨ繘涓€姝ュ叧鑱斿埌鏌愪釜鏅偣
-6. 鐐硅禐鍜屾敹钘忛兘閫氳繃鍞竴绾︽潫闃查噸
-7. 璇勮鏀寔鑷叧鑱斿舰鎴愬洖澶嶆爲
+## 5.2 数据主链路
 
-### 9.4 鍏抽敭绾︽潫
+整个系统的数据主链路可以概括为：
 
-| 绾︽潫 | 浣滅敤 |
-| --- | --- |
-| `uniq_attraction_city_name` | 鍚屼竴鍩庡競涓嬫櫙鐐瑰悕鍞竴 |
-| `uniq_post_like` | 鍚屼竴鐢ㄦ埛瀵瑰悓涓€甯栧瓙鍙兘鐐硅禐涓€娆?|
-| `uniq_post_favorite` | 鍚屼竴鐢ㄦ埛瀵瑰悓涓€甯栧瓙鍙兘鏀惰棌涓€娆?|
-
-## 10. 鍏抽敭浠ｇ爜鍏ュ彛绱㈠紩
-
-| 鏂囦欢 | 浣滅敤 | 澶囨敞 |
-| --- | --- | --- |
-| `backend/smart_travel/settings.py` | 鐜閰嶇疆銆佹暟鎹簱鍒囨崲銆佺敓浜ч厤缃?| 椤圭洰閰嶇疆鍏ュ彛 |
-| `backend/smart_travel/urls.py` | 鍏ㄥ眬璺敱姹囨€?| API 涓诲叆鍙?|
-| `backend/apps/destinations/importers.py` | Excel 瀵煎叆鏍稿績閫昏緫 | 鏁版嵁鍏ュ簱鏈€鍏抽敭 |
-| `backend/apps/destinations/home_recommendations.py` | 棣栭〉涓€у寲鎺ㄨ崘 | 棣栭〉绠楁硶鍏ュ彛 |
-| `backend/apps/destinations/amap.py` | 楂樺痉澶╂皵鍜屽湴鍥剧紦瀛?| 绗笁鏂归泦鎴?|
-| `backend/apps/planner/services.py` | AI 琛岀▼瑙勫垝涓庤鍒欓檷绾?| 瑙勫垝鏍稿績 |
-| `backend/apps/community/views.py` | 绀惧尯浜や簰琛屼负 | 鐐硅禐銆佽瘎璁恒€佹敹钘?|
-| `backend/apps/core/activity.py` | 鎿嶄綔鏃ュ織瀹¤ | 鍚庡彴鍙拷婧?|
-| `backend/apps/core/media_utils.py` | OSS 涓婁紶灏佽 | 涓婁紶鑳藉姏鏍稿績 |
-| `frontend/src/router/index.js` | 鍓嶇璺敱涓庡畧鍗?| 椤甸潰璁块棶鎺у埗 |
-| `frontend/src/services/api.js` | 鍓嶇 API 瀹㈡埛绔?| 涓庡悗绔鎺?|
-| `scripts/deploy_server.py` | 杩滅▼閮ㄧ讲鑴氭湰 | 绾夸笂閮ㄧ讲鑷姩鍖?|
-
-## 11. API 鎬昏
-
-### 11.1 鐢ㄦ埛涓庤祫鏂?
-- `POST /api/auth/register/`
-- `POST /api/auth/login/`
-- `POST /api/auth/logout/`
-- `GET /api/auth/me/`
-- `GET /api/profile/me/`
-- `PATCH /api/profile/me/`
-- `POST /api/uploads/`
-
-### 11.2 棣栭〉 / 鍩庡競 / 鏅偣
-
-- `GET /api/overview/`
-- `GET /api/cities/`
-- `GET /api/cities/{id}/`
-- `GET /api/cities/recommend/`
-- `GET /api/cities/{id}/weather/`
-- `GET /api/cities/{id}/static-map/`
-- `GET /api/attractions/`
-- `GET /api/attractions/{id}/`
-
-### 11.3 AI 琛岀▼
-
-- `POST /api/planner/generate/`
-- `GET /api/plans/`
-- `POST /api/plans/`
-
-### 11.4 绀惧尯
-
-- `GET /api/posts/`
-- `GET /api/posts/{id}/`
-- `POST /api/posts/`
-- `POST /api/posts/{id}/like/`
-- `POST /api/posts/{id}/favorite/`
-- `GET /api/posts/favorites/`
-- `POST /api/posts/{id}/comment/`
-
-### 11.5 鍚庡彴
-
-- `GET /api/backoffice/summary/`
-- `GET/PUT/DELETE /api/backoffice/users/`
-- `GET/POST/PUT/DELETE /api/backoffice/cities/`
-- `GET/POST/PUT/DELETE /api/backoffice/attractions/`
-- `GET/DELETE /api/backoffice/posts/`
-- `GET /api/backoffice/logs/`
-- `POST /api/backoffice/import-excels/`
-- `POST /api/backoffice/import-excels/upload/`
-
-## 12. 鏈湴寮€鍙戞祦绋?
-### 12.1 鍚庣
-
-```powershell
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver
+```mermaid
+flowchart LR
+    A[Excel 内容源] --> B[TravelCity]
+    B --> C[Attraction]
+    B --> D[TravelPlan]
+    B --> E[TravelPost]
+    C --> D
+    C --> E
+    F[auth_user] --> G[UserProfile]
+    F --> D
+    F --> E
+    E --> H[PostLike]
+    E --> I[PostFavorite]
+    E --> J[PostComment]
 ```
 
-### 12.2 瀵煎叆 Excel 鏁版嵁
+---
 
-```powershell
-cd backend
-.venv\Scripts\python.exe manage.py import_city_excels --directory "C:/Users/浣犵殑鐩綍/cities_data_excel"
+## 6. 关键运行流程
+
+## 6.1 页面请求流程
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant V as Vue Page
+    participant A as api.js
+    participant N as Nginx/Vite Proxy
+    participant D as Django API
+    participant S as Service Layer
+    participant DB as MySQL
+
+    U->>V: 打开页面
+    V->>A: 调用接口函数
+    A->>N: 发送 /api 请求
+    N->>D: 转发到 Django
+    D->>S: 执行业务逻辑
+    S->>DB: 查询/写入数据
+    DB-->>S: 返回结果
+    S-->>D: 业务结果
+    D-->>N: JSON 响应
+    N-->>A: 响应数据
+    A-->>V: 返回可消费对象
+    V-->>U: 渲染页面
 ```
 
-### 12.3 鍓嶇
+## 6.2 登录流程
 
-```powershell
-cd frontend
-npm install
-npm run dev
+```mermaid
+flowchart TD
+    A[用户提交用户名密码] --> B[POST /api/auth/login/]
+    B --> C[LoginAPIView]
+    C --> D[authenticate]
+    D --> E{认证成功?}
+    E -- 否 --> F[返回 400]
+    E -- 是 --> G[ensure_user_profile]
+    G --> H[创建或读取 Token]
+    H --> I[记录操作日志]
+    I --> J[返回 token 和 user 摘要]
+    J --> K[前端 setAuth 保存到 localStorage]
 ```
 
-### 12.4 甯哥敤鏍￠獙鍛戒护
+## 6.3 首页推荐流程
 
-```powershell
-cd backend
-.venv\Scripts\python.exe manage.py check
-.venv\Scripts\python.exe manage.py makemigrations --check --dry-run
-
-cd ..\frontend
-npm run build
+```mermaid
+flowchart TD
+    A[GET /api/overview/] --> B[HomeOverviewAPIView]
+    B --> C[build_home_payload]
+    C --> D[获取用户画像]
+    D --> E[计算推荐城市]
+    D --> F[计算推荐景点]
+    D --> G[构造省份卡片]
+    D --> H[获取最新帖子]
+    E --> I[序列化]
+    F --> I
+    G --> I
+    H --> I
+    I --> J[返回首页 JSON]
 ```
 
-## 13. 閮ㄧ讲璇存槑
+## 6.4 Excel 导入流程
 
-### 13.1 鐢熶骇閮ㄧ讲鏋舵瀯
-
-鏈」鐩綋鍓嶇敓浜ч儴缃叉柟寮忥細
-
-- 绯荤粺锛歎buntu 24.04 64 浣?- Web锛歂ginx
-- Python 杩涚▼锛欸unicorn
-- 搴旂敤锛欴jango
-- 鏁版嵁搴擄細MySQL
-- 杩涚▼瀹堟姢锛歴ystemd
-
-绾夸笂鐩綍涓庨厤缃矾寰勶細
-
-- 椤圭洰鐩綍锛歚/srv/smart_travel`
-- systemd锛歚/etc/systemd/system/smart_travel.service`
-- Nginx 绔欑偣锛歚/etc/nginx/sites-available/smart_travel`
-- Nginx 鍚敤閾炬帴锛歚/etc/nginx/sites-enabled/smart_travel`
-
-褰撳墠绾夸笂璁块棶鍦板潃锛?
-- `http://8.137.180.180/`
-
-### 13.2 閮ㄧ讲鍓嶅噯澶?
-#### 鏈湴鍑嗗
-
-1. 鍚庣渚濊禆瀹夎瀹屾垚
-2. 鍓嶇鑳藉 `npm run build`
-3. 鏈湴 MySQL 鏁版嵁姝ｇ‘
-4. `backend/.env` 涓涓夋柟瀵嗛挜瀹屾暣
-
-#### 鏈嶅姟鍣ㄥ噯澶?
-闇€瑕佸叿澶囷細
-
-- `root` 鎴栧彲 sudo 璐︽埛
-- 鍙敤鍏綉 IP
-- 鍙畨瑁?`nginx`銆乣mysql-server`銆乣python3-venv`
-
-### 13.3 鎵嬪姩閮ㄧ讲姝ラ
-
-#### 绗竴姝ワ細鏋勫缓鍓嶇
-
-```powershell
-cd frontend
-npm run build
+```mermaid
+flowchart TD
+    A[后台上传 Excel / 命令导入] --> B[import_excel_file]
+    B --> C[读取 workbook]
+    C --> D[校验表头]
+    D --> E[生成 TravelCity 默认字段]
+    E --> F[update_or_create TravelCity]
+    F --> G[逐行处理 Attraction]
+    G --> H[update_or_create Attraction]
+    H --> I[compute_city_profile]
+    I --> J[更新城市统计字段]
+    J --> K[返回导入结果]
 ```
 
-#### 绗簩姝ワ細瀵煎嚭鏈湴 MySQL
+## 6.5 AI 行程流程
 
-鍦?Windows 涓婃帹鑽愯繖鏍峰鍑猴細
-
-```powershell
-& 'C:\Program Files\MySQL\MySQL Server 8.0\bin\mysqldump.exe' `
-  -uroot -p浣犵殑瀵嗙爜 `
-  --default-character-set=utf8mb4 `
-  --single-transaction `
-  --routines `
-  --triggers `
-  --set-gtid-purged=OFF `
-  --result-file=C:\temp\smart_travel.sql `
-  smart_travel
+```mermaid
+flowchart TD
+    A[PlannerView 提交参数] --> B[POST /api/planner/generate/]
+    B --> C[PlannerGenerateAPIView]
+    C --> D[build_ai_plan]
+    D --> E[解析目标城市]
+    E --> F[准备推荐城市和景点池]
+    F --> G[尝试调用 LLM]
+    G --> H{LLM 成功?}
+    H -- 是 --> I[规范化 itinerary]
+    H -- 否 --> J[规则规划 itinerary]
+    I --> K[预算估算]
+    J --> K
+    K --> L{需要保存且用户已登录?}
+    L -- 是 --> M[创建 TravelPlan]
+    L -- 否 --> N[直接返回结果]
+    M --> O[记录日志]
+    N --> O
+    O --> P[前端渲染逐日行程]
 ```
 
-娉ㄦ剰锛?
-- 鍦?PowerShell 閲屼笉瑕佺敤 `>` 鍘婚噸瀹氬悜 mysqldump 杈撳嚭
-- 鎺ㄨ崘鐢?`--result-file`
-- 鍚﹀垯鍙兘鐢熸垚甯︾┖瀛楄妭鐨?UTF-16 鏂囦欢锛屾湇鍔″櫒瀵煎叆鏃朵細鎶ラ敊
+## 6.6 社区互动流程
 
-#### 绗笁姝ワ細鍑嗗涓婁紶鍐呭
+```mermaid
+flowchart TD
+    A[创建帖子] --> B[TravelPostViewSet.create]
+    B --> C[TravelPostCreateSerializer]
+    C --> D[保存 TravelPost]
+    D --> E[记录日志]
 
-闇€瑕佷笂浼狅細
-
-- `backend/`
-- `frontend/dist/`
-- 鏁版嵁搴撳浠?`smart_travel.sql`
-
-涓嶅簲涓婁紶锛?
-- `backend/.venv/`
-- `frontend/node_modules/`
-- `.git/`
-- `.idea/`
-- 鏈湴 `.env`
-
-#### 绗洓姝ワ細鏈嶅姟鍣ㄥ畨瑁呬緷璧?
-```bash
-apt-get update
-apt-get install -y nginx mysql-server python3-venv python3-pip
-systemctl enable --now mysql nginx
+    F[点赞 / 收藏 / 评论] --> G[action like/favorite/comment]
+    G --> H[写入关系表]
+    H --> I[刷新计数或重查详情]
+    I --> J[记录日志]
 ```
 
-#### 绗簲姝ワ細鍒涘缓椤圭洰鐩綍涓庤繍琛岀敤鎴?
-```bash
-useradd --system --create-home --shell /bin/bash smarttravel
-mkdir -p /srv/smart_travel
+## 6.7 后台工作台流程
+
+```mermaid
+flowchart TD
+    A[管理员访问 /backoffice] --> B[前端路由守卫检查]
+    B --> C[请求 /api/backoffice/*]
+    C --> D[IsAdminUserOnly]
+    D --> E[执行后台动作]
+    E --> F[写入 OperationLog]
+    F --> G[返回结果给 AdminView]
+    G --> H[更新工作台界面]
 ```
 
-#### 绗叚姝ワ細鎭㈠鏁版嵁搴?
-```bash
-mysql <<'SQL'
-DROP DATABASE IF EXISTS smart_travel;
-CREATE DATABASE smart_travel CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS 'smart_travel'@'127.0.0.1' IDENTIFIED BY '浣犵殑鏁版嵁搴撳瘑鐮?;
-CREATE USER IF NOT EXISTS 'smart_travel'@'localhost' IDENTIFIED BY '浣犵殑鏁版嵁搴撳瘑鐮?;
-GRANT ALL PRIVILEGES ON smart_travel.* TO 'smart_travel'@'127.0.0.1';
-GRANT ALL PRIVILEGES ON smart_travel.* TO 'smart_travel'@'localhost';
-FLUSH PRIVILEGES;
-SQL
+---
 
-mysql smart_travel < smart_travel.sql
+## 7. 部署拓扑
+
+## 7.1 当前生产部署拓扑
+
+```mermaid
+flowchart TB
+    U[Browser] --> N[Nginx :80]
+    N -->|/| F[Vue dist 静态文件]
+    N -->|/api/| G[Gunicorn 127.0.0.1:8000]
+    N -->|/site-admin/| G
+    G --> D[Django]
+    D --> M[(MySQL)]
+    D --> O[OSS]
+    D --> A[AMap API]
+    D --> L[DashScope / LLM]
 ```
 
-#### 绗竷姝ワ細鍒涘缓鍚庣铏氭嫙鐜骞跺畨瑁呬緷璧?
-```bash
-cd /srv/smart_travel/backend
-python3 -m venv .venv
-./.venv/bin/pip install --upgrade pip
-./.venv/bin/pip install -r requirements.txt
+## 7.2 为什么保留这种部署方式
+
+当前架构选择原生部署而非容器化，原因是：
+
+1. 系统规模不大，原生部署更直接
+2. 前端天然适合静态文件托管
+3. Django 与 Gunicorn + Nginx 组合成熟稳定
+4. 部署脚本已经覆盖安装、上传、数据库重建和服务启动
+
+---
+
+## 8. 部署步骤说明
+
+## 8.1 部署前准备
+
+需要准备：
+
+1. Ubuntu 服务器
+2. root 或有 sudo 的用户
+3. 项目压缩包
+4. MySQL dump
+5. 本地 `.env` 中的第三方密钥
+
+## 8.2 当前自动部署脚本做了什么
+
+`scripts/deploy_server.py` 负责：
+
+1. 通过 SSH 连接服务器
+2. 上传代码压缩包
+3. 上传数据库备份
+4. 安装 `nginx`、`mysql-server`、`python3-venv`
+5. 创建应用用户
+6. 解压项目到 `/srv/smart_travel`
+7. 创建虚拟环境并安装依赖
+8. 重建 MySQL 数据库
+9. 导入数据库 dump
+10. 生成远程 `.env`
+11. 写入 `systemd` 服务文件
+12. 写入 Nginx 站点配置
+13. 执行 `migrate`
+14. 执行 `collectstatic`
+15. 执行 `check`
+16. 启动服务并验证 HTTP 响应
+
+## 8.3 部署流程图
+
+```mermaid
+flowchart TD
+    A[本地准备代码包和 MySQL dump] --> B[执行 deploy_server.py]
+    B --> C[SSH 连接服务器]
+    C --> D[安装 Nginx/MySQL/Python]
+    D --> E[上传代码包与 SQL]
+    E --> F[解压到 /srv/smart_travel]
+    F --> G[创建 backend/.venv]
+    G --> H[pip install -r requirements.txt]
+    H --> I[重建 MySQL 数据库]
+    I --> J[导入 SQL dump]
+    J --> K[写入远程 .env]
+    K --> L[生成 systemd 与 Nginx 配置]
+    L --> M[manage.py migrate]
+    M --> N[collectstatic]
+    N --> O[systemctl start smart_travel]
+    O --> P[nginx -t 并重启]
+    P --> Q[访问首页和 API 验证]
 ```
 
-#### 绗叓姝ワ細鍐欑敓浜х幆澧冨彉閲?
-鏈嶅姟鍣?`backend/.env` 鑷冲皯闇€瑕侊細
+## 8.4 远程目录结构
 
-```env
-SECRET_KEY=鐢熶骇鐜涓撶敤瀵嗛挜
-DEBUG=False
-ALLOWED_HOSTS=8.137.180.180,127.0.0.1,localhost
-CSRF_TRUSTED_ORIGINS=http://8.137.180.180
-CORS_ALLOW_ALL_ORIGINS=False
-CORS_ALLOWED_ORIGINS=http://8.137.180.180
+默认部署目录：
 
-DB_ENGINE=mysql
-DB_NAME=smart_travel
-DB_USER=smart_travel
-DB_PASSWORD=浣犵殑鏁版嵁搴撳瘑鐮?DB_HOST=127.0.0.1
-DB_PORT=3306
+```text
+/srv/smart_travel/
+├─ backend/
+│  ├─ .venv/
+│  ├─ .env
+│  ├─ staticfiles/
+│  └─ ...
+├─ frontend/
+│  └─ dist/
+└─ ...
 ```
 
-濡傛灉椤圭洰瑕佸畬鏁村彲鐢紝杩橀渶瑕佽ˉ锛?
-- `OSS_*`
-- `DASHSCOPE_*`
-- `AMAP_*`
+---
 
-#### 绗節姝ワ細杩佺Щ涓庨潤鎬佹枃浠?
-```bash
-cd /srv/smart_travel/backend
-./.venv/bin/python manage.py migrate --noinput
-./.venv/bin/python manage.py collectstatic --noinput
-./.venv/bin/python manage.py check
+## 9. 配置说明
+
+## 9.1 后端环境变量
+
+最关键的环境变量包括：
+
+### Django 基础
+
+- `SECRET_KEY`
+- `DEBUG`
+- `ALLOWED_HOSTS`
+- `CSRF_TRUSTED_ORIGINS`
+- `CORS_ALLOW_ALL_ORIGINS`
+- `CORS_ALLOWED_ORIGINS`
+
+### 数据库
+
+- `DB_ENGINE`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_HOST`
+- `DB_PORT`
+
+### 文件上传
+
+- `OSS_ACCESS_KEY_ID`
+- `OSS_ACCESS_KEY_SECRET`
+- `OSS_BUCKET_NAME`
+- `OSS_ENDPOINT`
+- `OSS_REGION`
+- `OSS_MEDIA_PREFIX`
+
+### 地图天气
+
+- `AMAP_API_KEY`
+- `AMAP_BASE_URL`
+- `AMAP_REQUEST_TIMEOUT`
+
+### AI 行程
+
+- `LLM_PROVIDER`
+- `DASHSCOPE_API_KEY`
+- `DASHSCOPE_MODEL`
+- `DASHSCOPE_BASE_URL`
+- `LLM_API_TIMEOUT`
+
+## 9.2 前端配置
+
+当前前端不依赖独立 `.env`：
+
+1. 开发环境通过 `vite.config.js` 代理 `/api`
+2. 生产环境依赖 Nginx 同域反代
+
+这意味着前端不需要硬编码后端公网地址。
+
+---
+
+## 10. 数据库迁移与数据同步策略
+
+## 10.1 当前策略
+
+当前项目更适合“迁移结构 + 导入业务数据”或“直接迁移数据库 dump”。
+
+实际推荐顺序：
+
+1. 先执行 Django 迁移，保证结构完整
+2. 再导入 MySQL dump，保证业务数据一致
+3. 如果是空库，则可通过 Excel 重新导入城市和景点
+
+## 10.2 数据同步流程图
+
+```mermaid
+flowchart TD
+    A[本地 MySQL 数据] --> B[mysqldump]
+    B --> C[上传 SQL 到服务器]
+    C --> D[服务器重建 smart_travel 数据库]
+    D --> E[导入 SQL]
+    E --> F[manage.py migrate]
+    F --> G[数据库结构与数据同步完成]
 ```
 
-#### 绗崄姝ワ細閰嶇疆 Gunicorn(systemd)
+## 10.3 删除旧模型后的迁移现状
 
-`/etc/systemd/system/smart_travel.service`
+当前迁移已经包含：
 
-```ini
-[Unit]
-Description=Smart Travel Gunicorn
-After=network.target mysql.service
-Requires=mysql.service
+- 删除 `Destination`
+- 删除 `TripPlan`
 
-[Service]
-User=smarttravel
-Group=smarttravel
-WorkingDirectory=/srv/smart_travel/backend
-ExecStart=/srv/smart_travel/backend/.venv/bin/gunicorn smart_travel.wsgi:application --workers 2 --bind 127.0.0.1:8000 --timeout 120
-Restart=always
-RestartSec=5
+对应迁移：
 
-[Install]
-WantedBy=multi-user.target
-```
+- `backend/apps/core/migrations/0008_remove_legacy_destination_tripplan.py`
 
-鍚敤锛?
-```bash
-systemctl daemon-reload
-systemctl enable --now smart_travel
-```
+因此部署到新环境时，不应再依赖旧表。
 
-#### 绗崄涓€姝ワ細閰嶇疆 Nginx
+---
 
-`/etc/nginx/sites-available/smart_travel`
+## 11. 运维说明
 
-```nginx
-server {
-    listen 80;
-    listen [::]:80;
-    server_name 8.137.180.180 _;
+## 11.1 关键服务
 
-    root /srv/smart_travel/frontend/dist;
-    index index.html;
-    client_max_body_size 20M;
+生产环境主要关注：
 
-    location /static/ {
-        alias /srv/smart_travel/backend/staticfiles/;
-    }
+1. `smart_travel.service`
+2. `nginx`
+3. `mysql`
 
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 120s;
-    }
+## 11.2 常用命令
 
-    location /site-admin/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 120s;
-    }
+### 查看 Django 服务
 
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
-
-鍚敤锛?
-```bash
-find /etc/nginx/sites-enabled -maxdepth 1 -type l -name 'default*' -delete
-ln -sfn /etc/nginx/sites-available/smart_travel /etc/nginx/sites-enabled/smart_travel
-nginx -t
-systemctl restart nginx
-```
-
-### 13.4 浣跨敤鑴氭湰閮ㄧ讲
-
-椤圭洰涓凡缁忔彁渚涗簡锛?
-- `scripts/deploy_server.py`
-
-瀹冭礋璐ｈ嚜鍔ㄥ畬鎴愶細
-
-1. 杩炴帴鏈嶅姟鍣?2. 瀹夎渚濊禆
-3. 涓婁紶搴旂敤鍖呬笌 SQL
-4. 鍒涘缓铏氭嫙鐜
-5. 閲嶅缓杩滅▼ MySQL
-6. 鍐欏叆鐢熶骇 `.env`
-7. 鍐欏叆 systemd 涓?Nginx 閰嶇疆
-8. 鍚姩鏈嶅姟骞堕獙璇?
-鑴氭湰璋冪敤绀烘剰锛?
-```powershell
-$env:SMART_TRAVEL_SSH_PASSWORD='浣犵殑 SSH 瀵嗙爜'
-python scripts\deploy_server.py `
-  --host 8.137.180.180 `
-  --username root `
-  --archive C:\temp\smart_travel_app.tar.gz `
-  --dump C:\temp\smart_travel.sql
-```
-
-娉ㄦ剰锛?
-- 杩欎釜鑴氭湰浼氶噸寤鸿繙绋嬫暟鎹簱
-- 濡傛灉杩滅▼宸叉湁 `smart_travel` 鏁版嵁搴擄紝浼氬厛鍋氫竴娆℃湇鍔″櫒绔浠?- 浣嗗畠鐨勯粯璁よ涔変粛鐒舵槸鈥滅敤鏈湴 dump 瑕嗙洊杩滅▼鏁版嵁鈥?
-### 13.5 閮ㄧ讲鍚庢鏌?
 ```bash
 systemctl status smart_travel
-systemctl status nginx
-systemctl status mysql
-
-curl -I http://127.0.0.1/
-curl -I http://127.0.0.1/site-admin/login/
-curl http://127.0.0.1/api/overview/
+journalctl -u smart_travel -n 200 --no-pager
 ```
 
-甯哥敤杩愮淮鍛戒护锛?
+### 查看 Nginx
+
 ```bash
-journalctl -u smart_travel -n 200 --no-pager
-systemctl restart smart_travel
+nginx -t
+systemctl status nginx
 systemctl restart nginx
 ```
 
-## 14. 褰撳墠宸ョ▼娉ㄦ剰浜嬮」
+### 查看 MySQL
 
-1. ????? `Destination` ? `TripPlan` ?????????????????? `TravelCity` / `Attraction` / `TravelPlan`?
-```powershell
-cd backend
-.venv\Scripts\python.exe manage.py makemigrations --check --dry-run
+```bash
+systemctl status mysql
+mysql -u root -p
 ```
 
-3. 鍓嶇 API 鏄浉瀵硅矾寰?`/api`锛岀敓浜х幆澧冧緷璧?Nginx 鍙嶄唬锛屼笉寤鸿鏀规垚纭紪鐮佸煙鍚嶃€?4. 涓婁紶鐩墠璧?OSS锛屽鏋滆鏀规垚鏈湴鏂囦欢涓婁紶锛岄渶瑕佽皟鏁?`apps/core/media_utils.py`銆?
-## 15. 寤鸿鐨勫悗缁淮鎶ゆ柟寮?
-1. 姣忔鏀规ā鍨嬪墠鍏堢湅 `app_label = "core"` 鐨勫吋瀹圭害鏉熴€?2. 姣忔涓婄嚎鍓嶈嚦灏戞墽琛岋細
-   - `python manage.py check`
-   - `python manage.py makemigrations --check --dry-run`
-   - `npm run build`
-3. 姣忔閮ㄧ讲鍓嶄繚鐣欒繙绋嬫暟鎹簱澶囦唤銆?4. 濡傛灉鍚庣画鎺ュ叆鍩熷悕锛屼紭鍏堢户缁部鐢?`Nginx + Gunicorn + Django`锛屽彧鏄湪 Nginx 灞傝ˉ HTTPS 鍗冲彲銆?
+### 手工执行 Django 命令
 
+```bash
+cd /srv/smart_travel/backend
+./.venv/bin/python manage.py check
+./.venv/bin/python manage.py migrate
+./.venv/bin/python manage.py collectstatic --noinput
+```
+
+---
+
+## 12. 风险点与排障说明
+
+## 12.1 上传失败
+
+现象：
+
+- 头像上传失败
+- 帖子封面上传失败
+- 后台 Excel 上传失败
+
+优先检查：
+
+1. `OSS_*` 环境变量是否完整
+2. `oss2` 是否安装
+3. OSS bucket 权限是否正常
+
+## 12.2 天气或地图失败
+
+现象：
+
+- `/weather/` 返回 502
+- `/static-map/` 返回错误
+
+优先检查：
+
+1. `AMAP_API_KEY`
+2. 高德接口额度
+3. 城市地理缓存是否能正常解析
+
+## 12.3 AI 行程质量下降或回退
+
+现象：
+
+- 总是显示规则规划
+- 返回 fallback reason
+
+优先检查：
+
+1. `DASHSCOPE_API_KEY`
+2. `DASHSCOPE_MODEL`
+3. 网络连通性
+4. 大模型响应格式是否异常
+
+说明：
+
+这不一定是故障，也可能是系统主动兜底。
+
+## 12.4 后台无法访问
+
+优先检查：
+
+1. 前端用户 `is_staff`
+2. 路由守卫是否通过
+3. 后端 `IsAdminUserOnly` 是否拦截
+4. Nginx 是否正常反代 `/api/backoffice/`
+
+## 12.5 页面刷新后掉登录
+
+优先检查：
+
+1. 浏览器 `localStorage` 是否有 token
+2. `/api/auth/me/` 是否返回 401
+3. Token 是否已被删除
+
+---
+
+## 13. 安全与上线建议
+
+## 13.1 当前必须具备的安全项
+
+1. 生产环境 `DEBUG=False`
+2. 正确配置 `ALLOWED_HOSTS`
+3. 不再使用 root 作为 Django 运行用户
+4. `.env` 文件权限收紧
+5. 数据库使用独立应用账号
+
+## 13.2 建议补充的安全项
+
+1. 改成 SSH key 登录
+2. 配置 HTTPS
+3. 定期备份 MySQL
+4. 对 OSS 上传内容做类型和大小限制
+5. 为管理员账号设置更严格密码策略
+
+---
+
+## 14. 总结
+
+当前系统架构可以总结为三层：
+
+1. Vue 前端负责交互和页面组织
+2. Django 负责业务逻辑和 API
+3. MySQL + OSS + 高德 + LLM 共同提供数据和外部能力
+
+当前部署架构可以总结为：
+
+`Nginx -> Gunicorn -> Django -> MySQL`
+
+当前架构最重要的优点有三点：
+
+1. 模块边界清晰
+2. 数据主线稳定
+3. AI 能力具备规则兜底，不会因为第三方服务波动而整体失效
+
+如果后续继续扩展，最自然的方向是：
+
+1. 增强后台审核和统计能力
+2. 优化行程推荐质量
+3. 增加 HTTPS 和更完整的运维监控
+
+
+## 2026-03-29 Repository Update
+- Backend is MySQL-only. The SQLite fallback and `settings_test.py` have been removed.
+- `POST /api/auth/login/` no longer builds recommendation snapshots synchronously, so login latency is lower.
+- Home recommendations now use a two-stage flow:
+  1. `GET /api/overview/?mode=default` returns the fast default home ranking used for the first screen.
+  2. Logged-in clients then request `GET /api/overview/?mode=personalized` and replace the default cards after the personalized result is ready.
+- Recommendation snapshots persist only the top scored subset needed by the app, which reduces write time during refresh.
+- Current backend regression command: `python backend/manage.py test -v 2 --noinput`

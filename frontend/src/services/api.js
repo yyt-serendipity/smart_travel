@@ -89,8 +89,8 @@ export async function uploadMedia(file, category = "attachment") {
 }
 
 // Load the home page overview payload.
-export async function getOverview() {
-  return unwrap(await client.get("/overview/"));
+export async function getOverview(params = {}) {
+  return unwrap(await client.get("/overview/", { params }));
 }
 
 // Load the travel city list with optional filters.
@@ -113,11 +113,6 @@ export async function getAttraction(id) {
   return unwrap(await client.get(`/attractions/${id}/`));
 }
 
-// Request recommended cities for the planner.
-export async function recommendCities(params = {}) {
-  return unwrap(await client.get("/cities/recommend/", { params }));
-}
-
 // Load the attraction list with optional filters.
 export async function getAttractions(params = {}) {
   return unwrap(await client.get("/attractions/", { params }));
@@ -131,6 +126,11 @@ export async function getPosts(params = {}) {
 // Load one community post detail.
 export async function getPost(id) {
   return unwrap(await client.get(`/posts/${id}/`));
+}
+
+// Chat with the site assistant using either direct Qwen or the database agent.
+export async function chatAssistant(payload) {
+  return unwrap(await client.post("/assistant/chat/", payload, { timeout: 40000 }));
 }
 
 // Create a new community post.
@@ -165,11 +165,6 @@ export async function generatePlan(payload) {
       timeout: 40000,
     }),
   );
-}
-
-// Load saved plans for the current user.
-export async function getPlans() {
-  return unwrap(await client.get("/plans/"));
 }
 
 // Load the backoffice dashboard summary.
@@ -241,11 +236,6 @@ export async function getAdminPosts(params = {}) {
 // Delete a post in the backoffice.
 export async function deleteAdminPost(id) {
   return unwrap(await client.delete(`/backoffice/posts/${id}/`));
-}
-
-// Import local Excel workbooks into the database.
-export async function importExcelDirectory(payload = {}) {
-  return unwrap(await client.post("/backoffice/import-excels/", payload));
 }
 
 // Upload Excel workbooks from the browser and import them into the database.

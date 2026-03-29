@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from apps.backoffice.models import OperationLog
 from apps.community.models import TravelPost
+from apps.community.services import build_post_excerpt
 from apps.destinations.models import TravelCity
 from apps.core.tagging import normalize_profile_styles, normalize_public_tags
 from apps.users.models import UserProfile
@@ -25,9 +26,13 @@ class TravelPostAdminSerializer(serializers.ModelSerializer):
     author_name = serializers.CharField(source="author.username", read_only=True)
     city_name = serializers.CharField(source="city.name", read_only=True)
     attraction_name = serializers.CharField(source="attraction.name", read_only=True)
+    content_preview = serializers.SerializerMethodField()
 
     def validate_tags(self, value):
         return normalize_public_tags(value)
+
+    def get_content_preview(self, obj):
+        return build_post_excerpt(obj.content)
 
     class Meta:
         model = TravelPost
@@ -41,6 +46,7 @@ class TravelPostAdminSerializer(serializers.ModelSerializer):
             "attraction_name",
             "title",
             "content",
+            "content_preview",
             "cover_image",
             "tags",
             "likes_count",

@@ -14,6 +14,7 @@ from apps.community.models import PostFavorite, TravelPost
 from apps.community.services import refresh_post_counters
 from apps.core.activity import log_operation
 from apps.core.permissions import IsAuthorOrAdminOrReadOnly
+from apps.destinations.attraction_recommendations import mark_recommendation_snapshot_dirty
 
 
 class TravelPostViewSet(viewsets.ModelViewSet):
@@ -75,6 +76,7 @@ class TravelPostViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
+        mark_recommendation_snapshot_dirty(request.user)
         log_operation(
             request,
             "community",
@@ -102,6 +104,7 @@ class TravelPostViewSet(viewsets.ModelViewSet):
             post.likes.create(user=request.user)
             liked = True
         refresh_post_counters(post)
+        mark_recommendation_snapshot_dirty(request.user)
         log_operation(request, "community", "toggle-like", target=post, detail={"liked": liked})
         return Response({"liked": liked, "likes_count": post.likes_count})
 
@@ -116,6 +119,7 @@ class TravelPostViewSet(viewsets.ModelViewSet):
             PostFavorite.objects.create(post=post, user=request.user)
             favorited = True
         favorite_count = PostFavorite.objects.filter(post=post).count()
+        mark_recommendation_snapshot_dirty(request.user)
         log_operation(request, "community", "toggle-favorite", target=post, detail={"favorited": favorited})
         return Response({"favorited": favorited, "favorite_count": favorite_count})
 
@@ -126,6 +130,7 @@ class TravelPostViewSet(viewsets.ModelViewSet):
         serializer = PostCommentCreateSerializer(data=payload)
         serializer.is_valid(raise_exception=True)
         serializer.save(author=request.user)
+        mark_recommendation_snapshot_dirty(request.user)
         log_operation(
             request,
             "community",

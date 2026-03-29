@@ -1,265 +1,198 @@
-# Smart Journey 项目说明
+﻿# Smart Travel 项目概览
 
-## 1. 项目目标
+## 1. 项目定位
 
-这个项目是一个面向中国国内旅游场景的学生化综合平台，目标不是做复杂企业系统，而是把一套完整链路做清楚：
+`Smart Travel` 是一个围绕中国城市与景点内容构建的前后端分离旅游平台，当前版本聚焦四条主线：
 
-- 城市推荐
-- 景点详情
-- 景点级 AI 行程
-- 旅游社区
-- 独立后台管理
+- 城市与景点内容浏览
+- AI 行程规划与问答助手
+- 旅行社区内容沉淀
+- 后台管理与 Excel 数据导入
 
-相比上一版，这次更强调两件事：
+当前仓库以工程可运行性为主，不再维护旧版单体 `core/models.py` 结构，也不再维护 Docker 部署方案。
 
-1. 代码结构要更好理解  
-2. 景点不能只是城市的附属信息
-
-## 2. 当前功能
+## 2. 当前功能清单
 
 ### 用户端
 
-- 首页展示推荐城市、热门景点、最新帖子
-- 城市筛选与城市详情
-- 景点详情页
-- AI 行程规划，细化到景点和时段
-- 登录注册
-- 个人主页
-- 发帖、浏览、点赞、评论
+- 首页：省份入口卡片、热门城市、景点推荐、最新帖子
+- 城市列表 / 城市详情
+- 景点列表 / 景点详情
+- AI 行程规划页，支持 `agent` 与 `qwen` 双模式
+- 悬浮问答助手，支持数据库 Agent 与千问直连
+- 社区帖子流、帖子详情、点赞、收藏、评论
+- 登录、注册、个人主页、头像上传
 
-### 后台端
+### 管理端
 
-- 独立后台控制台 `/backoffice`
-- Django Admin `/site-admin/`
+- 独立后台工作台 `/backoffice`
+- 用户管理
 - 城市管理
 - 景点管理
 - 社区帖子管理
-- Excel 数据导入
+- 操作日志查看
+- 浏览器上传 Excel 并导入数据库
+- Django Admin `/site-admin/`
 
-## 3. Django 结构设计
-
-### 3.1 为什么不再只用一个 `core`
-
-原先业务代码几乎全部堆在 `apps/core` 中，虽然能跑，但不利于阅读和讲解。  
-这次保留了 `core.models` 作为数据层，避免数据库迁移风险，同时把业务逻辑拆分到多个 app。
-
-### 3.2 当前 app 划分
+## 3. 当前代码结构
 
 ```text
-apps/core
-  - 只保留模型与兼容层
+backend/
+├─ apps/
+│  ├─ backoffice/     # 后台 API 与管理序列化
+│  ├─ community/      # 帖子、评论、点赞、收藏、富文本清洗
+│  ├─ core/           # 日志、权限、上传、标签工具、管理命令、迁移
+│  ├─ destinations/   # 城市/景点模型、首页推荐、天气地图、推荐模型、Excel 导入
+│  ├─ planner/        # AI 行程生成、规则回退、问答助手、已保存行程
+│  └─ users/          # 登录注册、个人资料、上传入口
+├─ smart_travel/      # Django settings / urls / wsgi / asgi
+└─ manage.py
 
-apps/users
-  - 登录
-  - 注册
-  - 当前用户信息
-  - 个人资料
+frontend/
+├─ src/
+│  ├─ components/     # 通用卡片、富文本、后台图表、问答组件
+│  ├─ router/         # 路由与前端权限守卫
+│  ├─ services/       # API 封装
+│  ├─ stores/         # 本地认证与帖子互动状态
+│  ├─ utils/          # 前端工具函数
+│  └─ views/          # 页面级组件
+└─ package.json
 
-apps/destinations
-  - 首页概览
-  - 城市列表 / 详情
-  - 景点列表 / 详情
-  - Excel 导入器
-
-apps/planner
-  - AI 行程生成
-  - 我的行程
-
-apps/community
-  - 帖子列表 / 详情
-  - 发帖
-  - 点赞
-  - 评论
-
-apps/backoffice
-  - 后台汇总
-  - 城市管理 API
-  - 景点管理 API
-  - 帖子管理 API
-  - Excel 导入 API
+scripts/
+└─ deploy_server.py   # 服务器自动部署脚本
 ```
 
-这种方式比较适合学生项目：
+## 4. 数据模型现状
 
-- 结构直观
-- 讲解时可以按模块介绍
-- 不需要处理复杂的跨 app 模型迁移
+模型代码已经拆分到各业务 app：
 
-## 4. 数据模型
+- `apps/users/models.py` -> `UserProfile`
+- `apps/destinations/models.py` -> `TravelCity`、`Attraction`、`TravelCityGeoCache`、`UserAttractionRecommendationSnapshot`
+- `apps/planner/models.py` -> `TravelPlan`
+- `apps/community/models.py` -> `TravelPost`、`PostLike`、`PostFavorite`、`PostComment`
+- `apps/backoffice/models.py` -> `OperationLog`
 
-当前主要模型仍位于 `apps/core/models.py`：
+为了兼容历史数据表，模型仍保留：
 
-- `TravelCity`
-- `Attraction`
-- `UserProfile`
-- `TravelPlan`
-- `TravelPost`
-- `PostLike`
-- `PostComment`
-
-说明：
-
-- 这样做是为了保住现有 MySQL 数据表
-- 业务层已经按 app 拆开，但数据库不需要重建
-
-## 5. 爬虫与数据导入
-
-## 5.1 Excel 模板
-
-系统导入的 Excel 列结构为：
-
-```text
-名字 | 链接 | 地址 | 介绍 | 开放时间 | 图片链接 | 评分 | 建议游玩时间 | 建议季节 | 门票 | 小贴士 | Page
+```python
+class Meta:
+    app_label = "core"
 ```
 
-这套结构同时适用于：
+因此数据库表名仍是 `core_*`，但模型代码已经不在 `apps/core/models.py`。
 
-- 你已有的 `cities_data_excel`
-- 新爬虫脚本输出的 Excel
+### 已删除的旧模型
 
-## 5.2 新爬虫脚本
+- `Destination`
+- `TripPlan`
+- `TravelMapCache`
+- `backend/apps/core/models.py` 旧入口文件
 
-新脚本：
+## 5. 首页推荐与个性化现状
 
-`backend/scripts/crawl_ctrip_city_sights.py`
+首页接口是：`GET /api/overview/`
 
-抓取逻辑：
+当前前后端配合方式如下：
 
-1. 进入城市景点列表页  
-2. 抓取景点列表  
-3. 进入每个景点详情页  
-4. 提取景点名称、地址、介绍、开放时间、图片、评分、建议游玩时间、门票、小贴士  
-5. 输出成与项目兼容的 Excel
+1. 首屏先请求 `GET /api/overview/?mode=default`
+2. 已登录用户再补请求 `GET /api/overview/?mode=personalized`
+3. 前端用第二次返回结果覆盖默认推荐卡片
 
-### 当前真实抓取结果
+当前首页 payload 重点字段：
 
-已成功抓取并输出到：
+- `stats`
+- `province_cards`
+- `recommendation`
+- `featured_cities`
+- `spotlight_attractions`
+- `latest_posts`
+- `spotlight_model`
+- `spotlight_profile`
 
-`D:\My_py\test\crawled_city_excels`
+## 6. AI 能力现状
 
-已抓取城市：
+### 6.1 问答助手
 
-- 北京
-- 上海
-- 成都
-- 杭州
-- 西安
+接口：`POST /api/assistant/chat/`
 
-## 5.3 数据导入策略
+模式：
 
-当前采用的策略是：
+- `agent`：优先基于站内城市和景点库回答
+- `qwen`：直接请求千问兼容接口
 
-- 先写并验证新爬虫脚本
-- 再用爬虫输出目录补充导入热门城市
-- 由于爬虫当前只抓取了 5 个城市，完整库仍使用你提供的 `cities_data_excel` 作为主数据源
+前端入口：`frontend/src/components/AssistantChatWidget.vue`
 
-这种做法更稳妥：
+### 6.2 AI 行程规划
 
-- 有真实爬虫能力
-- 不会因为站点反爬而导致整库没数据
-- 可以持续增量抓取
+接口：`POST /api/planner/generate/`
 
-## 6. AI 行程设计
+模式：
 
-这次 AI 规划的重点不是“写一段摘要”，而是把结果细化到景点和时段。
+- `agent`：把可用景点池提供给大模型，再把结果标准化为前端固定结构
+- `qwen`：直接让模型输出 JSON 行程
+- 任一模式失败时，都会回退到规则规划
 
-### 输入
+返回重点字段：
 
-- 目标城市
-- 出发城市
-- 天数
-- 预算
-- 同行方式
-- 季节偏好
-- 兴趣标签
+- `planner_strategy`
+- `planner_mode`
+- `planner_provider`
+- `planner_model`
+- `fallback_reason`
+- `used_fallback`
+- `itinerary`
+- `budget_breakdown`
 
-### 输出
+## 7. 社区现状
 
-- 推荐城市
-- 行程总摘要
-- 预算拆分
-- 必去景点
-- 每日行程
-  - 上午
-  - 下午
-  - 夜晚
-- 每日动线建议
-- 打包清单
+社区接口由 `apps/community` 提供，当前已支持：
 
-### 实现方式
+- 富文本发帖
+- HTML 白名单清洗
+- 点赞
+- 收藏
+- 评论
+- 个人主页查看我的帖子 / 我的收藏
 
-- 按兴趣标签给城市打分
-- 再按兴趣和评分给景点排序
-- 每天选 2 到 3 个景点
-- 将景点拆进上午 / 下午 / 夜晚
-- 输出更适合前端展示的结构化 JSON
+前端关键改动：
 
-## 7. 前端设计说明
+- 发帖改为弹窗式编辑器
+- 使用 `RichTextEditor.vue` 与 `RichTextContent.vue`
+- 帖子卡片与详情共享统一富文本渲染逻辑
 
-## 7.1 用户端
+## 8. 后台现状
 
-用户端保留了统一品牌导航，但把数据类内容收回后台，不再在首页暴露统计板块。
+后台前端入口：`/backoffice`
 
-这次的页面调整包括：
+后台 API 前缀：`/api/backoffice/`
 
-- 整体主体宽度拉宽
-- 首页更强调城市和景点
-- 新增景点详情页
-- AI 结果页改成景点级展示
-- 社区页改成更像 QQ 空间的信息流布局
-
-## 7.2 后台端
-
-后台端现在是独立布局：
-
-- 左侧侧边栏
-- 中间主工作区
-- 不再复用用户端头部
-
-这样更符合“后台是单独界面”的要求。
-
-## 8. API 设计
-
-### 用户与资料
-
-- `POST /api/auth/register/`
-- `POST /api/auth/login/`
-- `POST /api/auth/logout/`
-- `GET /api/auth/me/`
-- `GET /api/profile/me/`
-- `PATCH /api/profile/me/`
-
-### 城市与景点
-
-- `GET /api/overview/`
-- `GET /api/cities/`
-- `GET /api/cities/{id}/`
-- `GET /api/cities/recommend/`
-- `GET /api/attractions/`
-- `GET /api/attractions/{id}/`
-
-### AI 行程
-
-- `POST /api/planner/generate/`
-- `GET /api/plans/`
-
-### 社区
-
-- `GET /api/posts/`
-- `GET /api/posts/{id}/`
-- `POST /api/posts/`
-- `POST /api/posts/{id}/like/`
-- `POST /api/posts/{id}/comment/`
-
-### 后台
+当前主要接口：
 
 - `GET /api/backoffice/summary/`
-- `POST /api/backoffice/import-excels/`
+- `GET/PUT/DELETE /api/backoffice/users/{id}/`
 - `GET/POST/PUT/DELETE /api/backoffice/cities/`
 - `GET/POST/PUT/DELETE /api/backoffice/attractions/`
 - `GET/DELETE /api/backoffice/posts/`
+- `GET /api/backoffice/logs/`
+- `POST /api/backoffice/import-excels/upload/`
 
-## 9. 启动方式
+说明：浏览器上传导入是当前后台实际使用的 Excel 入口；`import-excels/` 目录导入接口保留给本地目录导入场景。
+
+## 9. 数据导入与管理命令
+
+当前可用命令：
+
+- `python manage.py import_city_excels --directory "..."`
+- `python manage.py seed_demo_data`
+- `python manage.py normalize_tags`
+- `python manage.py enrich_city_profiles`
+
+说明：
+
+- 旧文档中提到的 `backend/scripts/crawl_ctrip_city_sights.py` 当前仓库里已经不存在，不应再作为现行流程说明。
+- 当前主数据入口是 Excel 导入，而不是仓库内爬虫脚本。
+
+## 10. 本地启动
 
 ### 后端
 
@@ -270,6 +203,7 @@ python -m venv .venv
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py import_city_excels --directory "C:/Users/YT-yuntian/Desktop/cities_data_excel"
+python manage.py seed_demo_data
 python manage.py runserver
 ```
 
@@ -281,24 +215,33 @@ npm install
 npm run dev
 ```
 
-## 10. 验证结果
+## 11. 环境依赖
 
-当前已经完成：
+后端默认读取 `backend/.env`，主要环境变量分组如下：
 
-- Django 语法编译检查通过
-- `python manage.py check` 通过
-- `npm run build` 通过
-- 新爬虫脚本真实抓取成功
-- 爬虫输出 Excel 成功写入新目录
-- 后台接口抽检通过
-- 景点详情接口抽检通过
-- AI 行程接口抽检通过
+- Django：`SECRET_KEY`、`DEBUG`、`ALLOWED_HOSTS`
+- MySQL：`DB_NAME`、`DB_USER`、`DB_PASSWORD`、`DB_HOST`、`DB_PORT`
+- OSS：`OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET` 等
+- LLM：`LLM_PROVIDER`、`DASHSCOPE_API_KEY`、`DASHSCOPE_MODEL`、`LLM_API_TIMEOUT`
+- 高德：`AMAP_API_KEY`、`AMAP_BASE_URL`、`AMAP_REQUEST_TIMEOUT`
 
-## 11. 后续可以继续做的方向
+## 12. 推荐的校验命令
 
-- 给后台控制台拆成真正的多页面，而不只是 query tab
-- 增加景点图片画廊
-- 增加帖子回复输入框
-- 增加收藏城市 / 收藏景点
-- 增加地图与路线规划
-- 继续扩大爬虫抓取城市覆盖面
+```powershell
+cd backend
+python manage.py check
+python manage.py test -v 2 --noinput
+
+cd ..\frontend
+npm run build
+```
+
+## 13. 进一步阅读
+
+- `docs/codebase-handbook.md`
+- `docs/development-architecture-deployment-guide.md`
+- `docs/project-development-handbook.md`
+- `docs/assistant-chat-and-planner-modes.md`
+- `docs/attraction-recommendation-model.md`
+- `docs/planner-rule-fallback-design.md`
+- `docs/ui-data-redesign-and-recommendation-cache.md`
