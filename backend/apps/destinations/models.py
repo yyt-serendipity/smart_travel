@@ -35,6 +35,7 @@ class TravelCity(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "travel_city"
         ordering = ["-is_featured", "-average_rating", "name"]
 
     def __str__(self) -> str:
@@ -63,6 +64,7 @@ class Attraction(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "attraction"
         ordering = ["-rating", "name"]
         constraints = [
             models.UniqueConstraint(fields=["city", "name"], name="uniq_attraction_city_name"),
@@ -89,6 +91,7 @@ class TravelCityGeoCache(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "travel_city_geo_cache"
         ordering = ["city_id"]
 
     def __str__(self) -> str:
@@ -113,6 +116,7 @@ class UserAttractionRecommendationSnapshot(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "user_attraction_recommendation_snapshot"
         ordering = ["-updated_at"]
 
     def __str__(self) -> str:

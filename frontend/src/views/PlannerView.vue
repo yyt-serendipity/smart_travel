@@ -174,6 +174,60 @@
             </div>
           </section>
         </form>
+
+        <section class="planner-form-section planner-history-section">
+          <div class="planner-section-head planner-history-head">
+            <div>
+              <span>历史行程</span>
+              <strong>已保存的 AI 规划</strong>
+            </div>
+            <button
+              v-if="authState.user && savedPlans.length > collapsedPlanCount"
+              class="btn btn-secondary planner-history-toggle"
+              type="button"
+              @click="plansExpanded = !plansExpanded"
+            >
+              {{ plansExpanded ? "收起" : `展开全部 (${savedPlans.length})` }}
+            </button>
+          </div>
+
+          <div v-if="authState.user" class="planner-history-stack">
+            <p v-if="historyMessage" class="planner-subtle-note">{{ historyMessage }}</p>
+
+            <div v-if="loadingPlans" class="planner-history-empty">
+              <p class="muted">正在读取历史行程...</p>
+            </div>
+
+            <div v-else-if="visibleSavedPlans.length" class="planner-history-list">
+              <button
+                v-for="plan in visibleSavedPlans"
+                :key="plan.id"
+                class="planner-history-card"
+                :class="{ active: activePlanId === plan.id }"
+                type="button"
+                @click="restoreSavedPlan(plan)"
+              >
+                <div class="planner-history-copy">
+                  <strong>{{ plan.title }}</strong>
+                  <p class="muted">{{ plan.city_detail?.name || "未关联城市" }} | {{ plan.duration_days }} 天</p>
+                  <p class="muted">{{ formatPlanDate(plan.created_at) }}</p>
+                </div>
+                <span class="pill">RMB {{ plan.estimated_budget || 0 }}</span>
+              </button>
+              <p v-if="!plansExpanded && hiddenPlanCount > 0" class="muted planner-history-more">
+                还有 {{ hiddenPlanCount }} 条已保存行程，点击“展开全部”查看。
+              </p>
+            </div>
+
+            <div v-else class="planner-history-empty">
+              <p class="muted">还没有已保存的 AI 行程，生成后会自动出现在这里。</p>
+            </div>
+          </div>
+
+          <div v-else class="planner-history-empty">
+            <p class="muted">登录后会自动保存 AI 行程，并在这里显示历史记录。</p>
+          </div>
+        </section>
       </article>
 
       <article class="card planner-result-panel">
@@ -401,13 +455,21 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue"
 import { RouterLink, useRoute } from "vue-router";
 
 import CityCard from "../components/CityCard.vue";
-import { generatePlan, getCities } from "../services/api";
+import { generatePlan, getCities, getTravelPlans } from "../services/api";
+import { authState } from "../stores/auth";
 
 const route = useRoute();
+const PLANNER_CACHE_KEY = "smart_journey_planner_state";
+const collapsedPlanCount = 3;
 const loading = ref(false);
 const result = ref(null);
 const errorMessage = ref("");
 const cityOptions = ref([]);
+const savedPlans = ref([]);
+const loadingPlans = ref(false);
+const historyMessage = ref("");
+const activePlanId = ref(null);
+const plansExpanded = ref(false);
 const targetKeyword = ref(typeof route.query.targetCity === "string" ? route.query.targetCity : "");
 const departureKeyword = ref("");
 const targetMenuOpen = ref(false);
@@ -457,6 +519,149 @@ const loadingSteps = [
   },
 ];
 
+function createBudgetBreakdown(totalBudget) {
+  const total = Number(totalBudget || 0);
+  if (!total) return {};
+  return {
+    transport: Math.floor(total * 0.28),
+    tickets: Math.floor(total * 0.22),
+    food: Math.floor(total * 0.2),
+    stay: Math.max(0, total - Math.floor(total * 0.28) - Math.floor(total * 0.22) - Math.floor(total * 0.2)),
+  };
+}
+
+function collectPlanSpots(itinerary = []) {
+  const seen = new Set();
+  const spots = [];
+
+  itinerary.forEach((day) => {
+    const candidates = Array.isArray(day?.spots) && day.spots.length
+      ? day.spots
+      : (day?.blocks || []).map((block) => block?.spot).filter(Boolean);
+
+    candidates.forEach((spot) => {
+      if (!spot?.id || seen.has(spot.id)) return;
+      seen.add(spot.id);
+      spots.push(spot);
+    });
+  });
+
+  return spots;
+}
+
+function normalizePlannerResult(payload = {}) {
+  const itinerary = Array.isArray(payload.itinerary) ? payload.itinerary : [];
+  return {
+    trip_title: payload.trip_title || payload.title || "",
+    summary: payload.summary || "",
+    estimated_budget: Number(payload.estimated_budget || 0),
+    budget_breakdown: payload.budget_breakdown || createBudgetBreakdown(payload.estimated_budget),
+    city: payload.city || payload.city_detail || null,
+    recommended_cities: Array.isArray(payload.recommended_cities) ? payload.recommended_cities : [],
+    must_visit_spots: Array.isArray(payload.must_visit_spots) && payload.must_visit_spots.length
+      ? payload.must_visit_spots
+      : collectPlanSpots(itinerary).slice(0, 3),
+    packing_list: Array.isArray(payload.packing_list) ? payload.packing_list : [],
+    itinerary,
+    planner_mode: payload.planner_mode || "saved_plan",
+    planner_strategy: payload.planner_strategy || "saved",
+    planner_provider: payload.planner_provider || "saved",
+    planner_model: payload.planner_model || "",
+    matched_city_name: payload.matched_city_name || payload.city?.name || payload.city_detail?.name || "",
+    failure_reason: payload.failure_reason || "",
+    failure_stage: payload.failure_stage || "",
+    fallback_reason: payload.fallback_reason || "",
+    used_fallback: Boolean(payload.used_fallback),
+    saved_plan: payload.saved_plan || null,
+  };
+}
+
+function buildPlannerRequestFromSavedPlan(plan) {
+  return {
+    target_city: plan?.city_detail?.name || "",
+    departure_city: plan?.departure_city || "",
+    duration_days: Number(plan?.duration_days || 3),
+    season_hint: "",
+    budget_level: plan?.budget_level || "balanced",
+    companions: plan?.companions || "朋友结伴",
+    interests: Array.isArray(plan?.interests) && plan.interests.length ? [...plan.interests] : [...defaultInterests],
+    mode: "agent",
+  };
+}
+
+function buildRouteContext(query = route.query) {
+  return {
+    targetCity: typeof query?.targetCity === "string" ? query.targetCity : "",
+    cityId: query?.cityId ? String(query.cityId) : "",
+  };
+}
+
+function applyRequestPayload(payload = {}) {
+  form.target_city = payload.target_city || "";
+  form.departure_city = payload.departure_city || getDefaultDepartureCity();
+  form.duration_days = Number(payload.duration_days || 3);
+  form.season_hint = payload.season_hint || "";
+  form.budget_level = payload.budget_level || "balanced";
+  form.companions = payload.companions || "朋友结伴";
+  form.interests = Array.isArray(payload.interests) && payload.interests.length ? [...payload.interests] : [...defaultInterests];
+  form.mode = payload.mode === "qwen" ? "qwen" : "agent";
+  targetKeyword.value = form.target_city;
+  departureKeyword.value = form.departure_city;
+}
+
+function persistPlannerState(requestPayload, resultPayload) {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.setItem(
+    PLANNER_CACHE_KEY,
+    JSON.stringify({
+      requestPayload,
+      resultPayload,
+      activePlanId: activePlanId.value,
+      routeContext: buildRouteContext(),
+    }),
+  );
+}
+
+function clearPlannerState() {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(PLANNER_CACHE_KEY);
+}
+
+function restorePlannerState() {
+  if (typeof window === "undefined") return false;
+  const raw = window.sessionStorage.getItem(PLANNER_CACHE_KEY);
+  if (!raw) return false;
+
+  try {
+    const parsed = JSON.parse(raw);
+    const currentRouteContext = buildRouteContext();
+    const hasExplicitRouteContext = Boolean(currentRouteContext.targetCity || currentRouteContext.cityId);
+    if (hasExplicitRouteContext) {
+      if (!parsed?.routeContext) {
+        return false;
+      }
+      const sameRouteContext =
+        parsed.routeContext.targetCity === currentRouteContext.targetCity &&
+        parsed.routeContext.cityId === currentRouteContext.cityId;
+      if (!sameRouteContext) {
+        return false;
+      }
+    }
+    if (parsed?.requestPayload) {
+      applyRequestPayload(parsed.requestPayload);
+    }
+    if (parsed?.resultPayload) {
+      result.value = normalizePlannerResult(parsed.resultPayload);
+    }
+    activePlanId.value = parsed?.activePlanId || parsed?.resultPayload?.saved_plan?.id || null;
+    plansExpanded.value = false;
+    return Boolean(parsed?.resultPayload);
+  } catch {
+    clearPlannerState();
+    return false;
+  }
+}
+
 function getDefaultDepartureCity() {
   return cityOptions.value[0]?.name || "";
 }
@@ -480,10 +685,16 @@ const plannerStrategyLabel = computed(() => {
   if (!result.value) {
     return form.mode === "qwen" ? "千问直连" : "数据库 Agent";
   }
+  if (result.value.planner_mode === "saved_plan") {
+    return "历史记录";
+  }
   return result.value.planner_strategy === "qwen" ? "千问直连" : "数据库 Agent";
 });
 const plannerModeLabel = computed(() => {
   if (!result.value) return "";
+  if (result.value.planner_mode === "saved_plan") {
+    return "已保存行程";
+  }
   if (result.value.used_fallback) {
     return "规则兜底";
   }
@@ -500,6 +711,22 @@ const plannerModeLabel = computed(() => {
     return "生成失败";
   }
   return "规则规划";
+});
+const hiddenPlanCount = computed(() => Math.max(0, savedPlans.value.length - collapsedPlanCount));
+const visibleSavedPlans = computed(() => {
+  if (plansExpanded.value || savedPlans.value.length <= collapsedPlanCount) {
+    return savedPlans.value;
+  }
+
+  const activeIndex = savedPlans.value.findIndex((item) => item.id === activePlanId.value);
+  if (activeIndex >= collapsedPlanCount) {
+    return [
+      ...savedPlans.value.slice(0, Math.max(0, collapsedPlanCount - 1)),
+      savedPlans.value[activeIndex],
+    ];
+  }
+
+  return savedPlans.value.slice(0, collapsedPlanCount);
 });
 
 function cityCoverStyle(coverImage) {
@@ -564,6 +791,10 @@ function resetForm() {
   form.departure_city = departureKeyword.value;
   errorMessage.value = "";
   result.value = null;
+  activePlanId.value = null;
+  plansExpanded.value = false;
+  historyMessage.value = "";
+  clearPlannerState();
 }
 
 let loadingTicker = null;
@@ -595,6 +826,7 @@ function buildRequestPayload() {
     companions: form.companions,
     interests: form.interests.length ? [...form.interests] : [...defaultInterests],
     mode: form.mode,
+    save_plan: Boolean(authState.user),
   };
   const matchedCity = cityOptions.value.find((item) => item.name === payload.target_city);
   if (matchedCity) {
@@ -603,17 +835,68 @@ function buildRequestPayload() {
   return payload;
 }
 
+async function loadSavedPlans() {
+  if (!authState.user) {
+    savedPlans.value = [];
+    activePlanId.value = null;
+    return;
+  }
+
+  loadingPlans.value = true;
+  historyMessage.value = "";
+  try {
+    const plans = await getTravelPlans();
+    savedPlans.value = plans.filter((item) => Number(item.user) === Number(authState.user?.id));
+    if (activePlanId.value && !savedPlans.value.some((item) => item.id === activePlanId.value)) {
+      activePlanId.value = null;
+    }
+  } catch {
+    historyMessage.value = "历史行程加载失败，请稍后刷新。";
+  } finally {
+    loadingPlans.value = false;
+  }
+}
+
+function restoreSavedPlan(plan) {
+  const requestPayload = buildPlannerRequestFromSavedPlan(plan);
+  const restoredResult = normalizePlannerResult({
+    ...plan,
+    city: plan.city_detail,
+    matched_city_name: plan.city_detail?.name || "",
+    planner_mode: "saved_plan",
+    planner_strategy: "saved",
+    planner_provider: "saved",
+    saved_plan: plan,
+  });
+
+  applyRequestPayload(requestPayload);
+  result.value = restoredResult;
+  errorMessage.value = "";
+  activePlanId.value = plan.id;
+  persistPlannerState(requestPayload, restoredResult);
+}
+
+function formatPlanDate(value) {
+  return value ? new Date(value).toLocaleString("zh-CN") : "";
+}
+
 async function handleSubmit() {
   form.target_city = targetKeyword.value.trim();
   form.departure_city = departureKeyword.value.trim();
   if (!form.target_city || !form.departure_city) return;
 
+  const requestPayload = buildRequestPayload();
   loading.value = true;
   startLoadingTicker();
   errorMessage.value = "";
   result.value = null;
+  activePlanId.value = null;
   try {
-    result.value = await generatePlan(buildRequestPayload());
+    const response = await generatePlan(requestPayload);
+    result.value = normalizePlannerResult(response);
+    activePlanId.value = response.saved_plan?.id || null;
+    persistPlannerState(requestPayload, result.value);
+    await loadSavedPlans();
   } catch (error) {
     const responseData = error.response?.data || {};
     errorMessage.value = responseData.failure_reason || responseData.detail || "行程生成失败，请稍后重试。";
@@ -625,6 +908,7 @@ async function handleSubmit() {
 
 onMounted(async () => {
   cityOptions.value = await getCities({ limit: 500 });
+  let restoredFromCache = false;
 
   if (!targetKeyword.value && route.query.cityId) {
     const matchedCity = cityOptions.value.find((item) => String(item.id) === String(route.query.cityId));
@@ -637,6 +921,13 @@ onMounted(async () => {
   if (!departureKeyword.value || !cityOptions.value.find((item) => item.name === departureKeyword.value)) {
     departureKeyword.value = getDefaultDepartureCity();
     form.departure_city = departureKeyword.value;
+  }
+
+  restoredFromCache = restorePlannerState();
+
+  await loadSavedPlans();
+  if (restoredFromCache) {
+    historyMessage.value = "已恢复上一次查看的 AI 行程。";
   }
 });
 
@@ -663,6 +954,13 @@ watch(
         form.target_city = matchedCity.name;
       }
     }
+  },
+);
+
+watch(
+  () => authState.user?.id || null,
+  async () => {
+    await loadSavedPlans();
   },
 );
 
@@ -774,6 +1072,75 @@ onBeforeUnmount(() => {
 .planner-form {
   display: grid;
   gap: 18px;
+}
+
+.planner-history-section,
+.planner-history-stack,
+.planner-history-list,
+.planner-history-empty {
+  display: grid;
+}
+
+.planner-history-stack,
+.planner-history-list {
+  gap: 12px;
+}
+
+.planner-history-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.planner-history-toggle {
+  white-space: nowrap;
+}
+
+.planner-history-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid rgba(17, 57, 68, 0.1);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.planner-history-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(10, 94, 99, 0.22);
+}
+
+.planner-history-card.active {
+  border-color: transparent;
+  background: linear-gradient(135deg, rgba(18, 57, 74, 0.98), rgba(10, 94, 99, 0.92) 56%, rgba(223, 127, 50, 0.88));
+  color: white;
+}
+
+.planner-history-card.active .muted {
+  color: rgba(255, 247, 238, 0.82);
+}
+
+.planner-history-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.planner-history-copy p {
+  margin: 0;
+}
+
+.planner-history-empty {
+  gap: 8px;
+}
+
+.planner-history-more {
+  margin: 0;
 }
 
 .planner-form-section {
@@ -1432,6 +1799,10 @@ onBeforeUnmount(() => {
   .planner-block-top {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .planner-history-head {
+    grid-template-columns: 1fr;
   }
 
   .planner-search-option {

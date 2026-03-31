@@ -30,8 +30,6 @@
     </nav>
 
     <div class="backoffice-panel card">
-      <p class="muted">独立后台入口</p>
-      <a class="btn btn-secondary" href="/site-admin/" target="_blank" rel="noreferrer">打开 Django Admin</a>
       <RouterLink class="btn btn-primary" to="/">回到用户端</RouterLink>
     </div>
   </aside>
@@ -44,11 +42,10 @@ import { RouterLink, useRoute } from "vue-router";
 import { authState } from "../../stores/auth";
 import AppLogo from "../AppLogo.vue";
 
-
 const items = [
-  { tab: "overview", label: "总览", desc: "导入与统计" },
+  { tab: "overview", label: "总览", desc: "核心指标与运营总览" },
   { tab: "users", label: "用户", desc: "管理账号与资料" },
-  { tab: "cities", label: "城市", desc: "维护城市聚合信息" },
+  { tab: "cities", label: "城市", desc: "维护城市信息" },
   { tab: "attractions", label: "景点", desc: "管理景点详情" },
   { tab: "posts", label: "社区", desc: "处理帖子内容" },
   { tab: "logs", label: "日志", desc: "查看系统操作记录" },

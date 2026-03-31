@@ -1,4 +1,4 @@
-﻿function normalizeProvinceName(value) {
+function normalizeProvinceName(value) {
   return value?.trim() || "未分省";
 }
 

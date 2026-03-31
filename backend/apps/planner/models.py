@@ -34,6 +34,7 @@ class TravelPlan(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "travel_plan"
         ordering = ["-created_at"]
 
     def __str__(self) -> str:

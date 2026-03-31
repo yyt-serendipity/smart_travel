@@ -1,93 +1,49 @@
-# Smart Journey 中国智能旅游平台
+# Smart Travel
 
-一个基于 `Django + Vue 3 + MySQL` 的学生化旅游项目，当前聚焦中国城市、景点详情、景点级 AI 行程、旅游社区和独立后台管理。
+`Smart Travel` 是一个围绕中国城市、景点、AI 行程和旅行社区构建的前后端分离项目。当前代码基于 `Django 5 + DRF`、`Vue 3 + Vite`、`MySQL`、阿里云 OSS、高德开放平台和千问兼容接口。
 
-## 这次版本的重点
+## 当前功能
 
-- 后端不再把业务逻辑都堆在一个 app 里
-- 前台和后台使用两套独立布局
-- 增加景点详情页
-- AI 行程细化到景点和时段
-- 旅游社区改成更像信息流的布局
-- 新增携程爬虫脚本，可直接生成 Excel
+- 首页两阶段推荐：首屏默认推荐，登录后再补个性化推荐。
+- 城市与景点浏览：支持城市列表、城市详情、景点详情、天气和静态地图。
+- AI 旅行规划：支持 `agent` 与 `qwen` 两种模式，失败时自动回退规则规划。
+- AI 行程留存：登录用户生成行程时会自动保存，规划页支持历史记录和返回页恢复。
+- 旅行社区：右侧使用轻量文本发帖表单，不再使用富文本编辑器。
+- 管理后台：统一入口为 `/backoffice`，总览页只保留 5 个核心数字和运营总览。
 
-## 当前后端结构
+## 技术栈
 
-数据库模型仍放在 `apps/core/models.py` 里，保证现有数据表不需要高风险迁移；业务代码已经按模块拆开：
+- 后端：`Django 5`、`Django REST Framework`
+- 前端：`Vue 3`、`Vue Router`、`Axios`、`Vite`
+- 数据库：`MySQL`
+- 文件上传：`OSS`
+- 地图与天气：`AMap API`
+- AI：`DashScope / 通义千问兼容接口`
+
+## 当前结构
 
 ```text
-backend/apps/
-├─ core/           # 数据模型与兼容层
-├─ users/          # 登录、注册、个人资料
-├─ destinations/   # 城市、景点、首页、Excel 导入
-├─ planner/        # AI 行程与已保存行程
-├─ community/      # 帖子、点赞、评论
-└─ backoffice/     # 后台控制台 API
+backend/
+  apps/
+    backoffice/
+    community/
+    core/
+    destinations/
+    planner/
+    users/
+frontend/
+  src/
+scripts/
+  deploy_server.py
+docs/
 ```
 
-这种拆法更适合课程项目和毕业设计：
+说明：
 
-- 目录更容易讲清楚
-- 每个 app 的职责更单一
-- 不需要为了拆 app 去重建数据库
-
-## 前端页面
-
-### 用户端
-
-- `/` 首页
-- `/cities` 城市推荐
-- `/cities/:id` 城市详情
-- `/attractions/:id` 景点详情
-- `/planner` AI 行程规划
-- `/community` 旅游社区
-- `/community/:id` 帖子详情
-- `/login` 登录
-- `/register` 注册
-- `/profile` 个人主页
-
-### 后台端
-
-- `/backoffice` 独立后台控制台
-- `/site-admin/` Django Admin
-
-## 数据策略
-
-项目现在采用两层数据来源：
-
-1. 优先使用新写的携程爬虫脚本，抓取城市 -> 景点列表 -> 景点详情，并生成 Excel  
-2. 如果爬虫覆盖不够，再回退到你提供的 `cities_data_excel`
-
-### 已生成的新爬虫数据
-
-目录：
-
-`D:\My_py\test\crawled_city_excels`
-
-目前已真实抓取并生成工作簿：
-
-- 北京
-- 上海
-- 成都
-- 杭州
-- 西安
-
-### 已导入的数据库
-
-当前库内数据来自：
-
-- 你提供的 `cities_data_excel` 全量导入
-- 新爬虫目录 `crawled_city_excels` 的 5 个热门城市补充导入
-
-## 本地数据库
-
-当前默认连接：
-
-- `host`: `127.0.0.1`
-- `port`: `3306`
-- `user`: `root`
-- `password`: `123456`
-- `database`: `smart_travel`
+- 模型代码已经按业务 app 拆分，不再维护 `apps/core/models.py`。
+- 为兼容历史迁移链，模型仍保留 `app_label = "core"`。
+- 数据库物理表名已经移除 `core_` 前缀，例如 `travel_city`、`travel_plan`、`travel_post`。
+- `/site-admin/` 已不再作为独立后台入口维护。
 
 ## 快速启动
 
@@ -100,6 +56,7 @@ python -m venv .venv
 pip install -r requirements.txt
 python manage.py migrate
 python manage.py import_city_excels --directory "C:/Users/YT-yuntian/Desktop/cities_data_excel"
+python manage.py seed_demo_data
 python manage.py runserver
 ```
 
@@ -111,52 +68,38 @@ npm install
 npm run dev
 ```
 
-## 爬虫脚本
-
-新脚本：
-
-`backend/scripts/crawl_ctrip_city_sights.py`
-
-示例：
+## 常用校验
 
 ```powershell
-.\backend\.venv\Scripts\python.exe backend\scripts\crawl_ctrip_city_sights.py `
-  --city-urls-file backend\scripts\ctrip_city_urls_sample.txt `
-  --output-dir D:\My_py\test\crawled_city_excels `
-  --max-pages 1 `
-  --max-attractions 8
+cd backend
+python manage.py check
+python manage.py test -v 2 --noinput
+
+cd ..\frontend
+npm run build
 ```
 
-单城市示例：
+## 当前生产部署
 
-```powershell
-.\backend\.venv\Scripts\python.exe backend\scripts\crawl_ctrip_city_sights.py `
-  --city-url https://you.ctrip.com/sight/chengdu104.html `
-  --city-name 成都 `
-  --output-dir D:\My_py\test\crawled_city_excels `
-  --max-pages 1 `
-  --max-attractions 5
-```
+当前生产部署默认使用 `scripts/deploy_server.py` 覆盖远端目录并导入本地 MySQL dump。
 
-## 演示账号
+最近一次覆盖发布完成于 `2026-03-30`：
 
-- 普通用户：`traveler / travel123456`
-- 管理员：`admin / admin123456`
+- 服务器：`8.137.180.180`
+- 部署目录：`/srv/smart_travel`
+- 服务：`smart_travel`、`nginx`、`mysql`
 
-## 已完成验证
+## 文档索引
 
-- `python manage.py check`
-- `python -m compileall -q backend`
-- `python manage.py seed_demo_data`
-- `npm run build`
-- 新爬虫脚本已真实抓取并成功输出 Excel
-- `/api/overview/`
-- `/api/cities/`
-- `/api/attractions/{id}/`
-- `/api/planner/generate/`
-- `/api/auth/login/`
-- `/api/backoffice/summary/`
+- `docs/README.md`
+- `docs/project-overview.md`
+- `docs/Smart Travel 代码总览手册.md`
+- `docs/Smart Travel 架构与部署说明.md`
+- `docs/Smart Travel 数据库设计.md`
+- `docs/Smart Travel 生产发布记录与 Runbook.md`
+- `docs/Smart Travel 项目开发手册.md`
 
-## 详细文档
+## 说明
 
-见 [docs/project-overview.md](docs/project-overview.md)。
+- 旧版文档中提到的仓库内爬虫脚本 `backend/scripts/crawl_ctrip_city_sights.py` 已不在当前仓库中。
+- 现行主数据入口是 Excel 导入与后台上传导入。

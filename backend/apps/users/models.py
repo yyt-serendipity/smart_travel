@@ -26,6 +26,7 @@ class UserProfile(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "user_profile"
         ordering = ["user__username"]
 
     def __str__(self) -> str:

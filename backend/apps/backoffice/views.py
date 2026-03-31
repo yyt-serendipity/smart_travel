@@ -13,7 +13,6 @@ from rest_framework.views import APIView
 from apps.backoffice.serializers import AdminUserSerializer, OperationLogSerializer, TravelCityAdminSerializer, TravelPostAdminSerializer
 from apps.backoffice.models import OperationLog
 from apps.community.models import PostComment, TravelPost
-from apps.community.serializers import TravelPostListSerializer
 from apps.core.activity import log_operation
 from apps.core.media_utils import save_uploaded_file
 from apps.core.permissions import IsAdminUserOnly
@@ -31,7 +30,7 @@ def parse_truthy(value) -> bool:
 
 
 def build_admin_summary() -> dict:
-    """汇总后台首页使用的统计数字、热门城市和最新帖子。"""
+    """Return the five counts used by the backoffice overview."""
 
     return {
         "user_count": User.objects.count(),
@@ -39,31 +38,17 @@ def build_admin_summary() -> dict:
         "attraction_count": Attraction.objects.count(),
         "post_count": TravelPost.objects.count(),
         "comment_count": PostComment.objects.count(),
-        "top_cities": list(TravelCity.objects.order_by("-attraction_count", "-average_rating")[:8]),
-        "latest_posts": list(TravelPost.objects.select_related("author", "city").order_by("-created_at")[:8]),
-        "recent_logs": list(OperationLog.objects.select_related("user").order_by("-created_at")[:10]),
     }
 
 
 class AdminSummaryAPIView(APIView):
-    """GET /api/backoffice/summary/ 返回后台概览统计数据。"""
+    """GET /api/backoffice/summary/ returns the five overview metrics."""
 
     permission_classes = [IsAdminUserOnly]
 
     def get(self, request):
         payload = build_admin_summary()
-        return Response(
-            {
-                "user_count": payload["user_count"],
-                "city_count": payload["city_count"],
-                "attraction_count": payload["attraction_count"],
-                "post_count": payload["post_count"],
-                "comment_count": payload["comment_count"],
-                "top_cities": TravelCityListSerializer(payload["top_cities"], many=True).data,
-                "latest_posts": TravelPostListSerializer(payload["latest_posts"], many=True, context={"request": request}).data,
-                "recent_logs": OperationLogSerializer(payload["recent_logs"], many=True).data,
-            }
-        )
+        return Response(payload)
 
 
 class AdminUserViewSet(viewsets.ModelViewSet):

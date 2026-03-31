@@ -1,65 +1,67 @@
-﻿# Smart Travel 项目概览
+# Smart Travel 项目概览
 
 ## 1. 项目定位
 
-`Smart Travel` 是一个围绕中国城市与景点内容构建的前后端分离旅游平台，当前版本聚焦四条主线：
+`Smart Travel` 是一个围绕中国城市与景点内容构建的前后端分离旅游平台。当前版本聚焦四条主线：
 
 - 城市与景点内容浏览
 - AI 行程规划与问答助手
 - 旅行社区内容沉淀
-- 后台管理与 Excel 数据导入
+- 后台运营与内容维护
 
-当前仓库以工程可运行性为主，不再维护旧版单体 `core/models.py` 结构，也不再维护 Docker 部署方案。
+当前仓库以可运行、可部署、可演示为目标，不再沿用旧版“所有模型集中在 `apps/core/models.py`”的单体结构。
 
 ## 2. 当前功能清单
 
 ### 用户端
 
-- 首页：省份入口卡片、热门城市、景点推荐、最新帖子
-- 城市列表 / 城市详情
-- 景点列表 / 景点详情
-- AI 行程规划页，支持 `agent` 与 `qwen` 双模式
-- 悬浮问答助手，支持数据库 Agent 与千问直连
+- 首页：默认推荐 + 登录后个性化推荐
+- 城市列表、城市详情、天气、静态地图
+- 景点列表、景点详情、相关推荐
+- AI 行程规划：支持 `agent` / `qwen` 双模式
+- AI 行程历史：登录用户自动保存，只展示当前用户自己的计划
+- AI 页面恢复：从景点详情返回规划页时，可恢复上一次生成结果
+- 问答助手：数据库 Agent 与千问直连双模式
 - 社区帖子流、帖子详情、点赞、收藏、评论
 - 登录、注册、个人主页、头像上传
 
 ### 管理端
 
-- 独立后台工作台 `/backoffice`
+- 后台工作台：`/backoffice`
+- 总览页：5 个关键数字 + 运营总览板块
 - 用户管理
 - 城市管理
 - 景点管理
-- 社区帖子管理
+- 帖子管理
 - 操作日志查看
-- 浏览器上传 Excel 并导入数据库
-- Django Admin `/site-admin/`
+- Excel 导入 API 与上传导入接口
 
 ## 3. 当前代码结构
 
 ```text
 backend/
 ├─ apps/
-│  ├─ backoffice/     # 后台 API 与管理序列化
-│  ├─ community/      # 帖子、评论、点赞、收藏、富文本清洗
-│  ├─ core/           # 日志、权限、上传、标签工具、管理命令、迁移
+│  ├─ backoffice/     # 后台 API、运营日志、管理端聚合逻辑
+│  ├─ community/      # 帖子、评论、点赞、收藏、帖子内容清洗
+│  ├─ core/           # 权限、日志、上传、标签工具、迁移、管理命令
 │  ├─ destinations/   # 城市/景点模型、首页推荐、天气地图、推荐模型、Excel 导入
-│  ├─ planner/        # AI 行程生成、规则回退、问答助手、已保存行程
+│  ├─ planner/        # AI 行程、问答助手、历史行程读取与保存
 │  └─ users/          # 登录注册、个人资料、上传入口
 ├─ smart_travel/      # Django settings / urls / wsgi / asgi
 └─ manage.py
 
 frontend/
 ├─ src/
-│  ├─ components/     # 通用卡片、富文本、后台图表、问答组件
-│  ├─ router/         # 路由与前端权限守卫
+│  ├─ components/     # 卡片、后台壳、帖子展示、问答组件、文件上传
+│  ├─ router/         # 路由与管理员守卫
 │  ├─ services/       # API 封装
-│  ├─ stores/         # 本地认证与帖子互动状态
+│  ├─ stores/         # 认证状态与帖子互动状态
 │  ├─ utils/          # 前端工具函数
 │  └─ views/          # 页面级组件
 └─ package.json
 
 scripts/
-└─ deploy_server.py   # 服务器自动部署脚本
+└─ deploy_server.py   # 服务器覆盖部署脚本
 ```
 
 ## 4. 数据模型现状
@@ -72,176 +74,39 @@ scripts/
 - `apps/community/models.py` -> `TravelPost`、`PostLike`、`PostFavorite`、`PostComment`
 - `apps/backoffice/models.py` -> `OperationLog`
 
-为了兼容历史数据表，模型仍保留：
+当前数据库物理表名已经统一改为无 `core_` 前缀：
 
-```python
-class Meta:
-    app_label = "core"
-```
+- `user_profile`
+- `travel_city`
+- `attraction`
+- `travel_city_geo_cache`
+- `user_attraction_recommendation_snapshot`
+- `travel_plan`
+- `travel_post`
+- `post_like`
+- `post_favorite`
+- `post_comment`
+- `operation_log`
 
-因此数据库表名仍是 `core_*`，但模型代码已经不在 `apps/core/models.py`。
+## 5. 当前实现中的几个重要变化
 
-### 已删除的旧模型
+- `/site-admin/` 已不再作为独立后台入口维护。
+- 社区发帖已改为轻量文本表单，后端再把纯文本转换为安全 HTML。
+- AI 行程支持“自动保存 + 历史恢复 + 返回页恢复”。
+- 后台总览只保留 5 个核心数字和运营总览板块。
 
-- `Destination`
-- `TripPlan`
-- `TravelMapCache`
-- `backend/apps/core/models.py` 旧入口文件
+## 6. 当前部署方式
 
-## 5. 首页推荐与个性化现状
+本地开发：
 
-首页接口是：`GET /api/overview/`
+- 前端通过 Vite 启动开发服务
+- `/api` 由代理转发到 Django
 
-当前前后端配合方式如下：
+生产环境：
 
-1. 首屏先请求 `GET /api/overview/?mode=default`
-2. 已登录用户再补请求 `GET /api/overview/?mode=personalized`
-3. 前端用第二次返回结果覆盖默认推荐卡片
+- Nginx 托管 `frontend/dist`
+- Nginx 反代 `/api/` 到 Gunicorn
+- Gunicorn 承载 Django
+- MySQL 保存业务数据
 
-当前首页 payload 重点字段：
-
-- `stats`
-- `province_cards`
-- `recommendation`
-- `featured_cities`
-- `spotlight_attractions`
-- `latest_posts`
-- `spotlight_model`
-- `spotlight_profile`
-
-## 6. AI 能力现状
-
-### 6.1 问答助手
-
-接口：`POST /api/assistant/chat/`
-
-模式：
-
-- `agent`：优先基于站内城市和景点库回答
-- `qwen`：直接请求千问兼容接口
-
-前端入口：`frontend/src/components/AssistantChatWidget.vue`
-
-### 6.2 AI 行程规划
-
-接口：`POST /api/planner/generate/`
-
-模式：
-
-- `agent`：把可用景点池提供给大模型，再把结果标准化为前端固定结构
-- `qwen`：直接让模型输出 JSON 行程
-- 任一模式失败时，都会回退到规则规划
-
-返回重点字段：
-
-- `planner_strategy`
-- `planner_mode`
-- `planner_provider`
-- `planner_model`
-- `fallback_reason`
-- `used_fallback`
-- `itinerary`
-- `budget_breakdown`
-
-## 7. 社区现状
-
-社区接口由 `apps/community` 提供，当前已支持：
-
-- 富文本发帖
-- HTML 白名单清洗
-- 点赞
-- 收藏
-- 评论
-- 个人主页查看我的帖子 / 我的收藏
-
-前端关键改动：
-
-- 发帖改为弹窗式编辑器
-- 使用 `RichTextEditor.vue` 与 `RichTextContent.vue`
-- 帖子卡片与详情共享统一富文本渲染逻辑
-
-## 8. 后台现状
-
-后台前端入口：`/backoffice`
-
-后台 API 前缀：`/api/backoffice/`
-
-当前主要接口：
-
-- `GET /api/backoffice/summary/`
-- `GET/PUT/DELETE /api/backoffice/users/{id}/`
-- `GET/POST/PUT/DELETE /api/backoffice/cities/`
-- `GET/POST/PUT/DELETE /api/backoffice/attractions/`
-- `GET/DELETE /api/backoffice/posts/`
-- `GET /api/backoffice/logs/`
-- `POST /api/backoffice/import-excels/upload/`
-
-说明：浏览器上传导入是当前后台实际使用的 Excel 入口；`import-excels/` 目录导入接口保留给本地目录导入场景。
-
-## 9. 数据导入与管理命令
-
-当前可用命令：
-
-- `python manage.py import_city_excels --directory "..."`
-- `python manage.py seed_demo_data`
-- `python manage.py normalize_tags`
-- `python manage.py enrich_city_profiles`
-
-说明：
-
-- 旧文档中提到的 `backend/scripts/crawl_ctrip_city_sights.py` 当前仓库里已经不存在，不应再作为现行流程说明。
-- 当前主数据入口是 Excel 导入，而不是仓库内爬虫脚本。
-
-## 10. 本地启动
-
-### 后端
-
-```powershell
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py import_city_excels --directory "C:/Users/YT-yuntian/Desktop/cities_data_excel"
-python manage.py seed_demo_data
-python manage.py runserver
-```
-
-### 前端
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-## 11. 环境依赖
-
-后端默认读取 `backend/.env`，主要环境变量分组如下：
-
-- Django：`SECRET_KEY`、`DEBUG`、`ALLOWED_HOSTS`
-- MySQL：`DB_NAME`、`DB_USER`、`DB_PASSWORD`、`DB_HOST`、`DB_PORT`
-- OSS：`OSS_ACCESS_KEY_ID`、`OSS_ACCESS_KEY_SECRET` 等
-- LLM：`LLM_PROVIDER`、`DASHSCOPE_API_KEY`、`DASHSCOPE_MODEL`、`LLM_API_TIMEOUT`
-- 高德：`AMAP_API_KEY`、`AMAP_BASE_URL`、`AMAP_REQUEST_TIMEOUT`
-
-## 12. 推荐的校验命令
-
-```powershell
-cd backend
-python manage.py check
-python manage.py test -v 2 --noinput
-
-cd ..\frontend
-npm run build
-```
-
-## 13. 进一步阅读
-
-- `docs/codebase-handbook.md`
-- `docs/development-architecture-deployment-guide.md`
-- `docs/project-development-handbook.md`
-- `docs/assistant-chat-and-planner-modes.md`
-- `docs/attraction-recommendation-model.md`
-- `docs/planner-rule-fallback-design.md`
-- `docs/ui-data-redesign-and-recommendation-cache.md`
+最近一次覆盖发布完成于 `2026-03-30`，公网入口为 `http://8.137.180.180/`。

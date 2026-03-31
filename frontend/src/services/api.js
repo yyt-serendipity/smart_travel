@@ -167,6 +167,11 @@ export async function generatePlan(payload) {
   );
 }
 
+// Load saved AI travel plans for the current user.
+export async function getTravelPlans(params = {}) {
+  return unwrap(await client.get("/plans/", { params }));
+}
+
 // Load the backoffice dashboard summary.
 export async function getAdminSummary() {
   return unwrap(await client.get("/backoffice/summary/"));
@@ -238,18 +243,3 @@ export async function deleteAdminPost(id) {
   return unwrap(await client.delete(`/backoffice/posts/${id}/`));
 }
 
-// Upload Excel workbooks from the browser and import them into the database.
-export async function importExcelFiles(files, overwrite = false) {
-  const formData = new FormData();
-  [...files].forEach((file) => {
-    formData.append("files", file);
-  });
-  formData.append("overwrite", overwrite ? "true" : "false");
-  return unwrap(
-    await client.post("/backoffice/import-excels/upload/", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    }),
-  );
-}

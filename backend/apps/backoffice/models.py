@@ -34,6 +34,7 @@ class OperationLog(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "operation_log"
         ordering = ["-created_at"]
 
     def __str__(self) -> str:

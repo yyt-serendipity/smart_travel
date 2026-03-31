@@ -2,136 +2,38 @@
   <section class="page admin-page">
     <p v-if="adminMessage" class="muted status-message">{{ adminMessage }}</p>
 
-    <article v-if="currentTab === 'overview'" class="card section-shell admin-command-center">
-      <div class="admin-command-row">
-        <div class="admin-command-copy">
-          <span class="eyebrow">Workbench</span>
-          <h2 class="section-title">企业级数据工作台</h2>
-          <p class="section-description">右侧只保留当前导航对应的模块内容。总览负责承接统计、导入、系统状态和日志概览，其他能力都从左侧导航单独进入。</p>
-        </div>
-
-        <div class="admin-command-actions">
-          <button class="btn btn-secondary" type="button" @click="refreshAll">刷新工作台</button>
-          <button class="btn btn-primary" type="button" @click="switchTab('users')">进入用户管理</button>
-        </div>
+    <article v-if="currentTab === 'overview'" class="card section-shell">
+      <div class="title-row">
+        <SectionHeader title="核心指标" description="总览页只保留当前后台最关键的五个业务数字。" />
+        <button class="btn btn-secondary" type="button" @click="refreshAll">刷新</button>
       </div>
 
-      <div class="admin-workbench-grid">
-        <div class="admin-workbench-main">
-          <div class="metric-grid admin-metric-grid">
-            <div v-for="card in kpiCards" :key="card.label" class="card stat-card admin-kpi-card">
-              <span class="muted">{{ card.label }}</span>
-              <strong>{{ card.value }}</strong>
-              <span class="stat-delta">{{ card.caption }}</span>
-            </div>
-          </div>
-
-          <div class="admin-chart-grid">
-            <DashboardBarChart
-              title="城市景点覆盖"
-              description="按景点数量排序，快速看内容资产最完整的城市。"
-              :items="topCityChartItems"
-            />
-            <DashboardDonutChart
-              title="平台内容结构"
-              description="城市、景点、帖子和评论在当前系统中的分布。"
-              :items="contentComposition"
-            />
-          </div>
-        </div>
-
-        <div class="admin-workbench-side">
-          <article class="card admin-side-panel">
-            <div class="title-row compact-row">
-              <div>
-                <strong>系统状态</strong>
-                <p class="muted">工作台运行和运营状态</p>
-              </div>
-              <span class="pill">Live</span>
-            </div>
-            <div class="grid" style="margin-top: 16px">
-              <div v-for="item in systemSignals" :key="item.label" class="timeline-item admin-signal-item">
-                <div class="title-row compact-row">
-                  <strong>{{ item.label }}</strong>
-                  <span class="pill">{{ item.state }}</span>
-                </div>
-                <p class="muted">{{ item.description }}</p>
-              </div>
-            </div>
-          </article>
-
-          <article class="card admin-side-panel">
-            <div class="title-row compact-row">
-              <div>
-                <strong>最近操作</strong>
-                <p class="muted">用于快速确认后台近期行为</p>
-              </div>
-              <button class="btn btn-secondary" type="button" @click="switchTab('logs')">全部日志</button>
-            </div>
-            <div class="grid" style="margin-top: 16px">
-              <div v-for="log in recentLogs" :key="log.id" class="timeline-item admin-log-compact">
-                <strong>{{ log.action }}</strong>
-                <p class="muted">{{ log.nickname || log.username || "匿名" }} · {{ log.target_name || log.request_path }}</p>
-              </div>
-            </div>
-          </article>
+      <div class="metric-grid admin-metric-grid" style="margin-top: 24px">
+        <div v-for="card in kpiCards" :key="card.label" class="card stat-card admin-kpi-card">
+          <span class="muted">{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <span class="stat-delta">{{ card.caption }}</span>
         </div>
       </div>
-
     </article>
 
     <article v-if="currentTab === 'overview'" class="card section-shell">
       <div class="title-row">
-        <SectionHeader title="运营总览" description="把数据导入、任务提醒和日志审计收成一个企业工作台总览。" />
-        <span class="pill">Overview</span>
+        <SectionHeader title="运营总览" description="把当前最关键的运营动作收口到一个板块里。" />
+        <span class="pill">{{ operationsBoard.length }} 项</span>
       </div>
 
       <div class="admin-overview-grid" style="margin-top: 24px">
-        <article class="card admin-panel-block">
+        <article v-for="task in operationsBoard" :key="task.title" class="card admin-panel-block">
           <div class="title-row compact-row">
             <div>
-              <strong>Excel 文件导入</strong>
-              <p class="muted">支持浏览器批量上传工作簿并直接入库。</p>
-            </div>
-            <span class="pill">.xlsx</span>
-          </div>
-
-          <form class="grid" style="margin-top: 18px" @submit.prevent="handleImportFiles">
-            <div class="field">
-              <label for="excelFiles">上传 Excel 文件</label>
-              <input id="excelFiles" type="file" accept=".xlsx" multiple @change="handleExcelChange" />
-            </div>
-            <label class="checkbox-row">
-              <input v-model="importForm.overwrite" type="checkbox" />
-              <span>覆盖工作簿中已移除的景点</span>
-            </label>
-            <div class="action-row">
-              <button class="btn btn-primary" type="submit" :disabled="!excelFiles.length">上传并导入</button>
-            </div>
-          </form>
-
-          <div v-if="excelFiles.length" class="chip-row" style="margin-top: 16px">
-            <span v-for="file in excelFiles" :key="file.name" class="pill">{{ file.name }}</span>
-          </div>
-          <p v-if="importMessage" class="muted status-message">{{ importMessage }}</p>
-        </article>
-
-        <article class="card admin-panel-block">
-          <div class="title-row compact-row">
-            <div>
-              <strong>任务中心</strong>
-              <p class="muted">企业后台常见的待处理事项收口区。</p>
-            </div>
-            <span class="pill">{{ operationsBoard.length }} 项</span>
-          </div>
-          <div class="grid" style="margin-top: 18px">
-            <div v-for="task in operationsBoard" :key="task.title" class="timeline-item admin-task-card">
-              <div class="title-row compact-row">
-                <strong>{{ task.title }}</strong>
-                <span class="pill">{{ task.value }}</span>
-              </div>
+              <strong>{{ task.title }}</strong>
               <p class="muted">{{ task.description }}</p>
             </div>
+            <span class="pill">{{ task.value }}</span>
+          </div>
+          <div class="action-row" style="margin-top: 18px">
+            <button class="btn btn-secondary" type="button" @click="switchTab(task.tab)">{{ task.action }}</button>
           </div>
         </article>
       </div>
@@ -545,8 +447,6 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import DashboardBarChart from "../components/backoffice/DashboardBarChart.vue";
-import DashboardDonutChart from "../components/backoffice/DashboardDonutChart.vue";
 import FileUploadField from "../components/FileUploadField.vue";
 import SectionHeader from "../components/SectionHeader.vue";
 import {
@@ -560,7 +460,6 @@ import {
   getAdminPosts,
   getAdminSummary,
   getAdminUsers,
-  importExcelFiles,
   saveAdminAttraction,
   saveAdminCity,
   saveAdminUser,
@@ -571,7 +470,7 @@ const route = useRoute();
 const router = useRouter();
 
 const currentTab = ref(route.query.tab || "overview");
-const summary = ref({ user_count: 0, city_count: 0, attraction_count: 0, post_count: 0, comment_count: 0, top_cities: [], recent_logs: [] });
+const summary = ref({ user_count: 0, city_count: 0, attraction_count: 0, post_count: 0, comment_count: 0 });
 const cityOptions = ref([]);
 const cities = ref([]);
 const attractions = ref([]);
@@ -579,7 +478,6 @@ const adminUsers = ref([]);
 const adminPosts = ref([]);
 const adminLogs = ref([]);
 const adminMessage = ref("");
-const importMessage = ref("");
 
 const userKeyword = ref("");
 const userRole = ref("");
@@ -602,25 +500,6 @@ const postCityId = ref("");
 const logCategory = ref("");
 const logStatus = ref("");
 
-const excelFiles = ref([]);
-const importForm = ref({
-  overwrite: false,
-});
-
-const topCityChartItems = computed(() =>
-  (summary.value.top_cities || []).slice(0, 6).map((city) => ({
-    label: city.name,
-    value: city.attraction_count || 0,
-  })),
-);
-
-const contentComposition = computed(() => [
-  { label: "城市", value: summary.value.city_count || 0 },
-  { label: "景点", value: summary.value.attraction_count || 0 },
-  { label: "帖子", value: summary.value.post_count || 0 },
-  { label: "评论", value: summary.value.comment_count || 0 },
-]);
-
 const kpiCards = computed(() => [
   { label: "用户数", value: summary.value.user_count || 0, caption: "账号资产" },
   { label: "城市数", value: summary.value.city_count || 0, caption: "地图资产" },
@@ -629,47 +508,29 @@ const kpiCards = computed(() => [
   { label: "评论数", value: summary.value.comment_count || 0, caption: "互动总量" },
 ]);
 
-const recentLogs = computed(() => (summary.value.recent_logs || []).slice(0, 5));
 const logCategories = computed(() => [...new Set(adminLogs.value.map((item) => item.category))]);
-
-const systemSignals = computed(() => [
-  {
-    label: "用户账户",
-    state: summary.value.user_count > 0 ? "Ready" : "Empty",
-    description: `当前共维护 ${summary.value.user_count || 0} 个用户账号，可在用户管理模块统一维护。`,
-  },
-  {
-    label: "媒体上传",
-    state: "Online",
-    description: "图片与文件上传链路可用，支持头像、封面、景点图和 Excel 入库。",
-  },
-  {
-    label: "内容审计",
-    state: recentLogs.value.length ? "Tracking" : "Idle",
-    description: `最近已记录 ${recentLogs.value.length} 条关键后台操作日志。`,
-  },
-  {
-    label: "城市资产",
-    state: summary.value.city_count > 0 ? "Ready" : "Empty",
-    description: `当前共维护 ${summary.value.city_count || 0} 个城市数据节点。`,
-  },
-]);
 
 const operationsBoard = computed(() => [
   {
-    title: "用户资料治理",
-    value: summary.value.user_count || 0,
-    description: "用户账号、头像和资料已纳入后台统一管理。",
+    title: "用户运营",
+    value: `${summary.value.user_count || 0} 个`,
+    description: "用户资料、权限与启停状态统一在工作台维护。",
+    tab: "users",
+    action: "查看用户",
   },
   {
-    title: "高优先级内容资产",
-    value: topCityChartItems.value[0]?.label || "暂无",
-    description: topCityChartItems.value[0] ? `当前景点覆盖最高的城市为 ${topCityChartItems.value[0].label}。` : "等待导入城市与景点数据。",
+    title: "目的地资产",
+    value: `${summary.value.city_count || 0} / ${summary.value.attraction_count || 0}`,
+    description: "城市和景点资料已经形成基础内容资产池。",
+    tab: "cities",
+    action: "管理资产",
   },
   {
-    title: "日志采集",
-    value: summary.value.recent_logs?.length || 0,
-    description: "后台关键操作已接入日志采集，可用于审计和问题回溯。",
+    title: "社区内容",
+    value: `${summary.value.post_count || 0} / ${summary.value.comment_count || 0}`,
+    description: "帖子与评论量可以直接反映当前社区活跃度。",
+    tab: "posts",
+    action: "查看社区",
   },
 ]);
 
@@ -778,10 +639,6 @@ function resolveError(error) {
   return "操作失败，请检查输入内容。";
 }
 
-function handleExcelChange(event) {
-  excelFiles.value = [...(event.target.files || [])];
-}
-
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString("zh-CN") : "";
 }
@@ -854,19 +711,6 @@ async function loadLogs() {
 
 async function refreshAll() {
   await Promise.all([loadSummary(), loadCityOptions(), loadUsers(), loadCities(), loadAttractions(), loadPosts(), loadLogs()]);
-}
-
-async function handleImportFiles() {
-  if (!excelFiles.value.length) return;
-  try {
-    const result = await importExcelFiles(excelFiles.value, importForm.value.overwrite);
-    importMessage.value = result.detail;
-    adminMessage.value = "Excel 文件导入完成。";
-    excelFiles.value = [];
-    await refreshAll();
-  } catch (error) {
-    importMessage.value = resolveError(error);
-  }
 }
 
 async function handleSaveUser() {

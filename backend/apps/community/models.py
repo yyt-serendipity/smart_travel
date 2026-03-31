@@ -30,6 +30,7 @@ class TravelPost(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "travel_post"
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
@@ -43,6 +44,7 @@ class PostLike(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "post_like"
         constraints = [
             models.UniqueConstraint(fields=["post", "user"], name="uniq_post_like"),
         ]
@@ -59,6 +61,7 @@ class PostFavorite(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "post_favorite"
         constraints = [
             models.UniqueConstraint(fields=["post", "user"], name="uniq_post_favorite"),
         ]
@@ -78,6 +81,7 @@ class PostComment(models.Model):
 
     class Meta:
         app_label = CORE_APP_LABEL
+        db_table = "post_comment"
         ordering = ["created_at"]
 
     def __str__(self) -> str:

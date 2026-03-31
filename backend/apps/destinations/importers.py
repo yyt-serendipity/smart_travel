@@ -8,6 +8,7 @@ from typing import BinaryIO
 from openpyxl import load_workbook
 
 from apps.core.tagging import normalize_public_tags
+from apps.destinations.city_province_corrections import resolve_city_province
 from apps.destinations.models import Attraction, TravelCity
 from apps.destinations.services import (
     clean_text,
@@ -71,6 +72,7 @@ def build_city_defaults(city_name: str, rows: list[tuple], source_file: str) -> 
     seasons = [clean_text(row[8]) for row in rows if len(row) > 8 and clean_text(row[8])]
     images = [clean_text(row[5]) for row in rows if len(row) > 5 and clean_text(row[5])]
     ticket_infos = [parse_ticket_data(row[9]) for row in rows if len(row) > 9 and clean_text(row[9])]
+    province = resolve_city_province(city_name, infer_province(city_name, *addresses, *descriptions))
 
     tag_pool = []
     for row in rows[:30]:
@@ -84,7 +86,7 @@ def build_city_defaults(city_name: str, rows: list[tuple], source_file: str) -> 
 
     # Build a usable city card straight from workbook content so the city list works after one import.
     return {
-        "province": fit_text(infer_province(city_name, *addresses, *descriptions), 100),
+        "province": fit_text(province, 100),
         "destination_type": infer_destination_type(city_name),
         "short_intro": fit_text(
             f"{city_name}收录了 {len(rows)} 个景点，适合城市漫游、周末度假和 AI 行程规划。",

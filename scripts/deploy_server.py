@@ -130,15 +130,6 @@ def build_nginx_content(host: str, app_root: str) -> str:
         proxy_read_timeout 120s;
     }}
 
-    location /site-admin/ {{
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 120s;
-    }}
-
     location / {{
         try_files $uri $uri/ /index.html;
     }}
@@ -189,20 +180,24 @@ GRANT ALL PRIVILEGES ON `{args.db_name}`.* TO '{args.db_user}'@'localhost';
 FLUSH PRIVILEGES;
 """.strip()
         run(ssh, "Create database and app user", f"cat <<'SQL' | mysql\n{sql}\nSQL")
-        run(ssh, "Import database dump", f"mysql {args.db_name} < {args.remote_dump}", timeout=2400)
+        run(ssh, "Import database dump", f"mysql --binary-mode=1 {args.db_name} < {args.remote_dump}", timeout=2400)
 
         remote_env_content = build_remote_env(local_env, args.host, args.db_name, args.db_user, db_password)
         write_remote_file(sftp, f"{args.app_root}/backend/.env", remote_env_content)
         write_remote_file(sftp, "/etc/systemd/system/smart_travel.service", build_service_content(args.app_user, args.app_root))
         write_remote_file(sftp, "/etc/nginx/sites-available/smart_travel", build_nginx_content(args.host, args.app_root))
 
-        run(ssh, "Set file permissions", f"chown -R {args.app_user}:{args.app_user} {args.app_root} && chmod 600 {args.app_root}/backend/.env")
+        run(
+            ssh,
+            "Set file permissions",
+            f"chown -R {args.app_user}:{args.app_user} {args.app_root} && chmod -R u=rwX,go=rX {args.app_root} && chmod 600 {args.app_root}/backend/.env",
+        )
         run(ssh, "Run Django migrations", f"su -s /bin/bash -c 'cd {args.app_root}/backend && ./.venv/bin/python manage.py migrate --noinput' {args.app_user}", timeout=1800)
         run(ssh, "Collect static files", f"su -s /bin/bash -c 'cd {args.app_root}/backend && ./.venv/bin/python manage.py collectstatic --noinput' {args.app_user}", timeout=1800)
         run(ssh, "Run Django system check", f"su -s /bin/bash -c 'cd {args.app_root}/backend && ./.venv/bin/python manage.py check' {args.app_user}", timeout=1800)
 
         run(ssh, "Enable nginx site", "find /etc/nginx/sites-enabled -maxdepth 1 -type l -name 'default*' -delete && ln -sfn /etc/nginx/sites-available/smart_travel /etc/nginx/sites-enabled/smart_travel")
-        run(ssh, "Reload systemd and start app", "systemctl daemon-reload && systemctl enable --now smart_travel")
+        run(ssh, "Reload systemd and restart app", "systemctl daemon-reload && systemctl enable smart_travel && systemctl restart smart_travel")
         run(ssh, "Validate nginx config", "nginx -t")
         run(ssh, "Restart nginx", "systemctl restart nginx")
         run(ssh, "Verify services", "systemctl --no-pager --full status smart_travel nginx mysql | tail -n 80")

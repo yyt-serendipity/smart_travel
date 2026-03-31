@@ -29,10 +29,7 @@ class TravelPlanViewSet(viewsets.ModelViewSet):
     queryset = TravelPlan.objects.select_related("city", "user").all()
 
     def get_queryset(self):
-        queryset = TravelPlan.objects.select_related("city", "user").order_by("-created_at")
-        if self.request.user.is_staff:
-            return queryset
-        return queryset.filter(user=self.request.user)
+        return TravelPlan.objects.select_related("city", "user").filter(user=self.request.user).order_by("-created_at")
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
